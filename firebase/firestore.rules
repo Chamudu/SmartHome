@@ -1,0 +1,104 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function membership(homeId) {
+      return get(/databases/$(database)/documents/homes/$(homeId)/members/$(request.auth.uid));
+    }
+
+    function activeMember(homeId) {
+      return signedIn()
+        && membership(homeId).data.active == true;
+    }
+
+    function hasRole(homeId, roles) {
+      return activeMember(homeId)
+        && membership(homeId).data.role in roles;
+    }
+
+    function validStatus(status) {
+      return status in ['ON', 'OFF', 'ERROR', 'DISCONNECTED'];
+    }
+
+    function validPowerStatus(status) {
+      return status in ['ON', 'OFF'];
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /homes/{homeId} {
+      allow read: if activeMember(homeId);
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasRole(homeId, ['OWNER']);
+      allow delete: if false;
+
+      match /members/{userId} {
+        allow read: if activeMember(homeId);
+        allow write: if hasRole(homeId, ['OWNER']);
+      }
+
+      match /floors/{floorId} {
+        allow read: if activeMember(homeId);
+        allow write: if hasRole(homeId, ['OWNER', 'OPERATOR']);
+
+        match /rooms/{roomId} {
+          allow read: if activeMember(homeId);
+          allow write: if hasRole(homeId, ['OWNER', 'OPERATOR']);
+        }
+      }
+
+      match /devices/{deviceId} {
+        allow read: if activeMember(homeId);
+        allow create: if hasRole(homeId, ['OWNER', 'OPERATOR'])
+          && validStatus(request.resource.data.reported.status)
+          && validPowerStatus(request.resource.data.desired.status);
+
+        allow update: if ownerOrOperatorDesiredStateUpdate(homeId)
+          || simulatorReportedStateUpdate(homeId);
+        allow delete: if hasRole(homeId, ['OWNER']);
+
+        match /events/{eventId} {
+          allow read: if activeMember(homeId);
+          allow write: if false;
+        }
+      }
+
+      match /alerts/{alertId} {
+        allow read: if activeMember(homeId);
+        allow create, delete: if false;
+        allow update: if activeMember(homeId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']);
+      }
+    }
+
+    function ownerOrOperatorDesiredStateUpdate(homeId) {
+      return hasRole(homeId, ['OWNER', 'OPERATOR'])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['desired', 'commandState', 'updatedAt'])
+        && validPowerStatus(request.resource.data.desired.status)
+        && request.resource.data.desired.requestedBy == request.auth.uid
+        && request.resource.data.commandState == 'PENDING';
+    }
+
+    function simulatorReportedStateUpdate(homeId) {
+      return hasRole(homeId, ['SIMULATOR'])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['reported', 'commandState', 'updatedAt'])
+        && validStatus(request.resource.data.reported.status)
+        && request.resource.data.commandState in ['IDLE', 'APPLIED', 'REJECTED'];
+    }
+  }
+}
