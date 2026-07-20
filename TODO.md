@@ -7,13 +7,17 @@ completed items should remain checked for release traceability.
 
 ## P0 — Foundation and vertical slice
 
-- [ ] Confirm installed JDK, Android SDK, Node.js, npm, Firebase CLI, and emulator capabilities.
-- [ ] Create requirements and acceptance-criteria document.
-- [ ] Create initial Android and simulator wireframes.
-- [ ] Define the domain model and Firestore document schema.
-- [ ] Write the first architecture decision records.
-- [ ] Scaffold the Kotlin/Compose Android application.
-- [ ] Scaffold the React/TypeScript simulator.
+- [x] Audit the installed development toolchain and emulator capabilities.
+- [ ] Configure terminal access to the bundled JDK and Android SDK tools.
+- [ ] Create an Android Virtual Device and verify it from the host session.
+- [x] Install and verify the Android foundation on a physical device.
+- [ ] Install and authenticate the Firebase CLI.
+- [x] Create requirements and acceptance-criteria document.
+- [x] Create initial Android and simulator wireframes.
+- [x] Define the domain model and Firestore document schema.
+- [x] Write the first architecture decision records.
+- [x] Scaffold the Kotlin/Compose Android application.
+- [x] Scaffold the React/TypeScript simulator.
 - [ ] Configure Firebase projects and the local Emulator Suite.
 - [ ] Implement authentication and initial Firestore Security Rules.
 - [ ] Complete one outlet vertical slice with bidirectional real-time synchronization.
@@ -59,4 +63,3 @@ completed items should remain checked for release traceability.
 - [ ] Make the complete demonstration runnable offline with Firebase emulators.
 - [ ] Add floor-plan background image upload.
 - [ ] Add energy and estimated-cost reporting.
-
