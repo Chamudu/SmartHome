@@ -1,0 +1,38 @@
+# Local notes and workspace material
+/learning/
+/AGENTS.md
+
+# Secrets and local configuration
+*.jks
+*.keystore
+google-services.json
+.env
+.env.*
+!.env.example
+
+# IDE and operating-system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Android / Gradle output
+.gradle/
+**/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# JavaScript output
+node_modules/
+dist/
+coverage/
+*.log
+
+# Firebase local state
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
