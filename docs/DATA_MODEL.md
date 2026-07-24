@@ -115,7 +115,7 @@ Security Rules.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `name` | string | Unique naming is optional; non-blank is required |
-| `level` | number | Ordering value such as `0`, `1`, or `-1` |
+| `level` | number | Unique home elevation/order such as `0`, `1`, or `-1` |
 | `gridColumns` | number | Proposed range: 4–40 |
 | `gridRows` | number | Proposed range: 4–40 |
 | `createdAt` | timestamp | Server timestamp |
@@ -135,6 +135,10 @@ Security Rules.
 
 Boundary and overlap checks run in domain logic for immediate feedback. A trusted backend transaction
 must revalidate layout mutations when strict concurrent-edit protection is required.
+
+For the simple-house model, each floor uses a unique level: `-1` represents a basement, `0` the ground
+floor, and positive values represent floors above ground. Separate wings at one elevation should be
+represented within one floor plan rather than as duplicate levels.
 
 ### `homes/{homeId}/devices/{deviceId}`
 

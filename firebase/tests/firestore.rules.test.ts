@@ -78,6 +78,18 @@ beforeEach(async () => {
       },
     )
 
+    await setDoc(
+      doc(database, 'homes', HOME_ID, 'floors', 'ground-floor'),
+      {
+        name: 'Ground floor',
+        level: 0,
+        gridColumns: 12,
+        gridRows: 16,
+        createdAt: now,
+        updatedAt: now,
+      },
+    )
+
     await setDoc(outletReference(database), {
       name: 'Main outlet',
       profile: 'OUTLET',
@@ -199,6 +211,96 @@ describe('outlet authorization', () => {
         'reported.updatedAt': new Date(),
         'reported.errorCode': null,
         commandState: 'APPLIED',
+        updatedAt: new Date(),
+      }),
+    )
+  })
+})
+
+describe('floor layout authorization and validation', () => {
+  it('allows an owner to create a valid floor', async () => {
+    const database =
+      testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertSucceeds(
+      setDoc(doc(database, 'homes', HOME_ID, 'floors', 'first-floor'), {
+        name: 'First floor',
+        level: 1,
+        gridColumns: 10,
+        gridRows: 12,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    )
+  })
+
+  it('denies a floor with grid dimensions outside supported limits', async () => {
+    const database =
+      testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertFails(
+      setDoc(doc(database, 'homes', HOME_ID, 'floors', 'invalid-floor'), {
+        name: 'Invalid floor',
+        level: 2,
+        gridColumns: 3,
+        gridRows: 41,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    )
+  })
+
+  it('allows an owner to create a room inside the floor grid', async () => {
+    const database =
+      testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertSucceeds(
+      setDoc(
+        doc(database, 'homes', HOME_ID, 'floors', 'ground-floor', 'rooms', 'kitchen'),
+        {
+          name: 'Kitchen',
+          column: 0,
+          row: 0,
+          width: 5,
+          height: 6,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ),
+    )
+  })
+
+  it('denies a room extending beyond the floor grid', async () => {
+    const database =
+      testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertFails(
+      setDoc(
+        doc(database, 'homes', HOME_ID, 'floors', 'ground-floor', 'rooms', 'invalid-room'),
+        {
+          name: 'Invalid room',
+          column: 10,
+          row: 14,
+          width: 4,
+          height: 4,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ),
+    )
+  })
+
+  it('denies the simulator creating floor data', async () => {
+    const database =
+      testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(
+      setDoc(doc(database, 'homes', HOME_ID, 'floors', 'simulator-floor'), {
+        name: 'Simulator floor',
+        level: 3,
+        gridColumns: 10,
+        gridRows: 10,
+        createdAt: new Date(),
         updatedAt: new Date(),
       }),
     )

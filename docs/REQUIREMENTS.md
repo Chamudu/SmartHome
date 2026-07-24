@@ -53,6 +53,7 @@ A user shall be able to create, rename, select, and remove floors within an auth
 Acceptance criteria:
 
 - A floor requires a non-blank name and grid dimensions within configured limits.
+- A floor level is unique within a home and determines vertical ordering.
 - Newly created floors appear without a manual refresh.
 - Removing a floor requires confirmation and cannot leave orphaned devices.
 - The UI clearly distinguishes loading, empty, and failure states.
