@@ -11,14 +11,14 @@ completed items should remain checked for release traceability.
 - [ ] Configure terminal access to the bundled JDK and Android SDK tools.
 - [ ] Create an Android Virtual Device and verify it from the host session.
 - [x] Install and verify the Android foundation on a physical device.
-- [ ] Install and authenticate the Firebase CLI.
+- [x] Install and authenticate the Firebase CLI.
 - [x] Create requirements and acceptance-criteria document.
 - [x] Create initial Android and simulator wireframes.
 - [x] Define the domain model and Firestore document schema.
 - [x] Write the first architecture decision records.
 - [x] Scaffold the Kotlin/Compose Android application.
 - [x] Scaffold the React/TypeScript simulator.
-- [ ] Configure Firebase projects and the local Emulator Suite.
+- [x] Configure Firebase projects and the local Emulator Suite.
 - [ ] Implement authentication and initial Firestore Security Rules.
 - [ ] Complete one outlet vertical slice with bidirectional real-time synchronization.
 - [ ] Add automated tests for the outlet state transition and authorization rules.
