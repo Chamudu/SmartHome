@@ -181,6 +181,44 @@ Deploy Firestore rules only after running their emulator-backed tests:
 firebase deploy --only firestore:rules,firestore:indexes
 ```
 
+## 8. Build and run the Android client
+
+The Android client uses the Firebase Android BoM so Authentication and Firestore SDK versions remain
+compatible. The Google Services Gradle plugin converts `app/google-services.json` into generated Android
+resources during the build.
+
+Build and run unit tests before installing:
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug
+```
+
+Connect a development device with USB debugging enabled, verify it, and install the debug application:
+
+```bash
+adb devices
+./gradlew :app:installDebug
+```
+
+Sign in with an active owner account. Passwords remain user-supplied runtime values and must never be
+stored in source code or project documentation.
+
+## 9. Verify real-time outlet synchronization
+
+Run the simulator and Android application simultaneously using their separate authenticated identities.
+Verify this command lifecycle:
+
+```text
+Android writes desired state and PENDING
+    → simulator receives the Firestore snapshot
+    → simulator applies the command
+    → simulator writes reported state and APPLIED
+    → Android receives the Firestore snapshot and renders confirmation
+```
+
+Then report `ERROR` and `DISCONNECTED` from the simulator. The Android viewport must update without a
+manual refresh and prevent normal power commands until the reported state returns to `ON` or `OFF`.
+
 ## Verification checklist
 
 - `app/google-services.json` is ignored by Git.
@@ -191,3 +229,5 @@ firebase deploy --only firestore:rules,firestore:indexes
 - The simulator account can read the outlet and write reported state.
 - The simulator account cannot write desired state, membership, events, or alerts.
 - The owner account cannot directly forge reported hardware state.
+- Android commands appear in the simulator without a manual refresh.
+- Simulator confirmations and error states appear in Android without a manual refresh.
