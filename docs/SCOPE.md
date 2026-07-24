@@ -17,9 +17,10 @@ real time, and rely on cloud-enforced automation for safety-critical behavior.
 
 - Create, rename, view, and remove floors.
 - Configure a simple grid for each floor.
-- Create rectangular rooms by specifying their grid position and dimensions.
-- Edit room names and placement while preventing invalid or overlapping layouts.
-- Place devices at valid positions within a floor layout.
+- Create rectangular rooms by dragging across grid cells, with a form-based accessible alternative.
+- Select and edit room names, positions, and dimensions while preventing invalid or overlapping layouts.
+- Long-press an empty grid cell to add a device at that location.
+- Tap an existing device marker to inspect, configure, move, or remove it.
 
 Complex architectural drawing, freehand walls, CAD import, and automatic floor-plan recognition are
 outside the MVP.
@@ -34,6 +35,15 @@ outside the MVP.
 - Configure scheduled on/off periods for lights.
 - Display a mock camera snapshot or safe mock stream.
 - Propagate state changes between Android, Firestore, and the simulator without manual refresh.
+- Create and configure supported devices from the Android application.
+
+### Interaction and visual design
+
+- Use a consistent Material 3 visual system across authentication, dashboard, editor, and detail views.
+- Support system light/dark appearance with deliberate semantic colors for status and safety severity.
+- Prefer direct manipulation on the floor grid while retaining discoverable buttons and forms.
+- Provide at least 48 dp interactive targets, readable hierarchy, text status labels, and accessibility
+  descriptions for gestures and device icons.
 
 ### Safety automation and alerts
 
@@ -81,4 +91,3 @@ outside the MVP.
 The MVP is complete when a seeded home with at least two floors can demonstrate every supported device
 profile, bidirectional real-time control, a backend-triggered safety cutoff, a scheduled light change,
 a camera mock, and a usage summary in a repeatable end-to-end scenario.
-

@@ -82,6 +82,18 @@ Acceptance criteria:
 - The marker is rendered at the same logical coordinate after screen resize or orientation change.
 - Selecting a marker opens the device summary or controls.
 
+#### FLOOR-04 — Direct manipulation editor (P1)
+
+A user shall be able to edit a floor through touch interaction with the logical grid.
+
+Acceptance criteria:
+
+- Dragging across empty cells previews a rectangular room and validates it before creation.
+- Tapping a room or device selects it and exposes contextual actions.
+- Long-pressing an empty cell opens device creation with the selected floor and coordinate prefilled.
+- Gesture cancellation or an invalid target does not persist a partial mutation.
+- Every gesture has a visible button or form alternative for discoverability and accessibility.
+
 ### Common device behavior
 
 #### DEVICE-01 — Display operational status (P0)
@@ -116,6 +128,20 @@ Acceptance criteria:
 - A simulated physical-state update appears in Android without refresh.
 - Backend-driven changes appear in both clients without refresh.
 - Each state includes a server-generated update timestamp and origin metadata for diagnosis.
+
+#### DEVICE-04 — Create and configure devices (P1)
+
+An owner or operator shall be able to add a supported device to a valid floor coordinate.
+
+Acceptance criteria:
+
+- Creation requires a non-blank name, supported profile, valid placement, and valid profile-specific
+  configuration.
+- Multi-switch creation supports exactly two, three, or five individually named channels.
+- Safety outlets require a maximum active duration within the supported bounds.
+- Lights and cameras require their relevant schedule or mock-media configuration.
+- Newly created devices appear in Android and the simulator without refresh.
+- Security Rules reject malformed profiles, invalid placement, and unauthorized creation.
 
 ### Device profiles
 
@@ -249,6 +275,10 @@ Acceptance criteria:
 - Status must not depend on color alone.
 - Interactive targets and text must remain usable at supported Android font and display scales.
 - Destructive actions require confirmation where accidental activation is plausible.
+- Interactive targets are at least 48 dp and gesture-only actions have visible alternatives.
+- The interface follows system light/dark appearance and preserves readable contrast.
+- Selected, pending, error, disconnected, and safety-critical states remain distinguishable without
+  relying on color alone.
 
 ### NFR-04 — Testability
 

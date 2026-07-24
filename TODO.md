@@ -29,6 +29,10 @@ completed items should remain checked for release traceability.
 - [x] Implement grid configuration and rectangular room editing.
 - [x] Validate room boundaries and prevent overlaps.
 - [x] Implement device placement and status indicators for the outlet vertical slice.
+- [ ] Add a touch-first floor editor with drag selection and visible accessible alternatives.
+- [ ] Add in-app creation and configuration for every supported device profile.
+- [ ] Apply a cohesive Material 3 theme, navigation structure, icons, and semantic status styling.
+- [ ] Verify 48 dp targets, screen-reader semantics, font scaling, and light/dark themes.
 - [ ] Implement variable-channel switch units.
 - [ ] Implement safety-critical device configuration.
 - [ ] Implement the trusted maximum-duration cutoff.

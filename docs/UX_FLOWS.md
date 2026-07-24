@@ -29,12 +29,23 @@ fails.
 ### Create a floor layout
 
 ```text
-Settings → Floors → Add floor → Set name and grid size → Add rectangular rooms
-                                                     → Save → Place devices
+Home → Select floor → Edit layout → Drag across cells → Name room → Apply
+                                    Long-press cell → Choose device profile → Configure → Add
 ```
 
-Room creation begins with explicit numeric grid coordinates and dimensions. Dragging and resizing can
-be added later without changing the underlying room model.
+Direct manipulation is the primary path. Visible Add room and Add device actions open equivalent forms
+for accessibility, precise correction, and gesture discoverability. Coordinates remain logical grid
+values rather than pixels.
+
+### Add a device
+
+```text
+Long-press empty cell → Select profile → Enter name/configuration → Review placement → Add
+                    ↘ visible Add device button → select coordinate → same form ↗
+```
+
+Tapping a marker opens its summary. Edit and Move are explicit actions so a normal control tap cannot
+accidentally change placement.
 
 ### Respond to a safety cutoff
 
@@ -129,11 +140,13 @@ status remains readable through icon shape, label, and accessibility description
 │ │ Utility      │ Bedroom       │ │
 │ └──────────────┴───────────────┘ │
 │                                  │
-│ [+ Add room]  [Place device]     │
+│ Drag empty cells to add a room    │
+│ Hold a cell to add a device       │
+│ [+ Room]  [+ Device]  [Edit]      │
 └──────────────────────────────────┘
 ```
 
-### Add or edit room
+### Add or edit room fallback
 
 ```text
 ┌──────────────────────────────────┐
@@ -218,6 +231,17 @@ Each data-backed screen must define:
 
 Device controls additionally define idle, command pending, command confirmed, command rejected, error,
 and disconnected states.
+
+## Direct-manipulation behavior
+
+- A short tap selects a room/device or clears the current selection.
+- A drag starting on an empty cell previews a room rectangle; release opens naming/confirmation.
+- A long press on an empty cell opens device creation at that coordinate.
+- Drag and long-press thresholds use platform gesture detection rather than custom timing constants.
+- Preview, selected, invalid, and committed states have distinct outline patterns and text descriptions.
+- Scrolling outside the editor must not accidentally create a room; the editor claims input only after
+  the drag gesture is recognized.
+- Haptic feedback may confirm long-press recognition but is never the only feedback.
 
 ## Accessibility baseline
 
