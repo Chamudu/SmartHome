@@ -41,9 +41,13 @@ fun FloorDashboardSection(
     onFloorSelected: (String) -> Unit,
     onFloorCreated: (String, Int, Int, Int) -> Unit,
     onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
+    onFloorDeleted: () -> Unit,
+    onRoomDeleted: (String) -> Unit,
 ) {
     var showFloorDialog by remember { mutableStateOf(false) }
     var showRoomDialog by remember { mutableStateOf(false) }
+    var confirmFloorDeletion by remember { mutableStateOf(false) }
+    var roomPendingDeletion by remember { mutableStateOf<String?>(null) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -103,8 +107,25 @@ fun FloorDashboardSection(
                             "${floor.rooms.size} rooms",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    TextButton(onClick = { showRoomDialog = true }) {
-                        Text("Add room")
+                    Row {
+                        TextButton(onClick = { confirmFloorDeletion = true }) {
+                            Text("Delete floor")
+                        }
+                        TextButton(onClick = { showRoomDialog = true }) {
+                            Text("Add room")
+                        }
+                    }
+                }
+
+                floor.rooms.forEach { room ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(room.name, modifier = Modifier.padding(vertical = 12.dp))
+                        TextButton(onClick = { roomPendingDeletion = room.id }) {
+                            Text("Delete")
+                        }
                     }
                 }
             }
@@ -144,6 +165,46 @@ fun FloorDashboardSection(
             },
         )
     }
+
+    if (confirmFloorDeletion) {
+        ConfirmationDialog(
+            title = "Delete floor?",
+            message = "All rooms on this floor will also be deleted. Floors containing devices cannot be deleted.",
+            onDismiss = { confirmFloorDeletion = false },
+            onConfirm = {
+                confirmFloorDeletion = false
+                onFloorDeleted()
+            },
+        )
+    }
+
+    roomPendingDeletion?.let { roomId ->
+        ConfirmationDialog(
+            title = "Delete room?",
+            message = "This removes the room from the floor layout.",
+            onDismiss = { roomPendingDeletion = null },
+            onConfirm = {
+                roomPendingDeletion = null
+                onRoomDeleted(roomId)
+            },
+        )
+    }
+}
+
+@Composable
+private fun ConfirmationDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

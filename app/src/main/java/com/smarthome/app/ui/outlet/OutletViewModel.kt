@@ -10,6 +10,7 @@ import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.repository.FloorRepository
+import com.smarthome.app.domain.repository.FloorContainsDevicesException
 import com.smarthome.app.domain.repository.OutletRepository
 import com.smarthome.app.domain.validation.FloorLayoutValidator
 import kotlinx.coroutines.Job
@@ -306,6 +307,69 @@ class OutletViewModel(
                     state.copy(
                         isSavingLayout = false,
                         layoutMessage = "The room could not be created.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteSelectedFloor() {
+        val floorId = mutableUiState.value.selectedFloorId ?: return
+        if (mutableUiState.value.isSavingLayout) return
+
+        viewModelScope.launch {
+            mutableUiState.update { state ->
+                state.copy(isSavingLayout = true, layoutMessage = null)
+            }
+
+            runCatching {
+                floorRepository.deleteFloor(HOME_ID, floorId)
+            }.onSuccess {
+                mutableUiState.update { state ->
+                    state.copy(
+                        isSavingLayout = false,
+                        layoutMessage = "Floor deleted.",
+                    )
+                }
+            }.onFailure { exception ->
+                val message = if (exception is FloorContainsDevicesException) {
+                    exception.message
+                } else {
+                    "The floor could not be deleted."
+                }
+                mutableUiState.update { state ->
+                    state.copy(
+                        isSavingLayout = false,
+                        layoutMessage = message,
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteRoom(roomId: String) {
+        val floorId = mutableUiState.value.selectedFloorId ?: return
+        if (mutableUiState.value.isSavingLayout) return
+
+        viewModelScope.launch {
+            mutableUiState.update { state ->
+                state.copy(isSavingLayout = true, layoutMessage = null)
+            }
+
+            runCatching {
+                floorRepository.deleteRoom(HOME_ID, floorId, roomId)
+            }.onSuccess {
+                mutableUiState.update { state ->
+                    state.copy(
+                        isSavingLayout = false,
+                        layoutMessage = "Room deleted.",
+                    )
+                }
+            }.onFailure {
+                mutableUiState.update { state ->
+                    state.copy(
+                        isSavingLayout = false,
+                        layoutMessage = "The room could not be deleted.",
                     )
                 }
             }

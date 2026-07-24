@@ -6,6 +6,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.repository.FloorRepository
+import com.smarthome.app.domain.repository.FloorContainsDevicesException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -119,6 +120,47 @@ class FirebaseFloorRepository(
             )
             .await()
             .id
+    }
+
+    override suspend fun deleteFloor(
+        homeId: String,
+        floorId: String,
+    ) {
+        val assignedDevices = firestore
+            .collection("homes")
+            .document(homeId)
+            .collection("devices")
+            .whereEqualTo("floorId", floorId)
+            .limit(1)
+            .get()
+            .await()
+
+        if (!assignedDevices.isEmpty) {
+            throw FloorContainsDevicesException()
+        }
+
+        val floorDocument = floorsCollection(homeId).document(floorId)
+        val roomDocuments = floorDocument.collection("rooms").get().await().documents
+
+        check(roomDocuments.size < 500) {
+            "This floor contains too many rooms for one atomic deletion."
+        }
+
+        val batch = firestore.batch()
+        roomDocuments.forEach { room -> batch.delete(room.reference) }
+        batch.delete(floorDocument)
+        batch.commit().await()
+    }
+
+    override suspend fun deleteRoom(
+        homeId: String,
+        floorId: String,
+        roomId: String,
+    ) {
+        roomsCollection(homeId, floorId)
+            .document(roomId)
+            .delete()
+            .await()
     }
 
     private fun floorsCollection(homeId: String) = firestore

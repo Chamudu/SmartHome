@@ -157,6 +157,17 @@ private class FakeFloorRepository : FloorRepository {
         floorId: String,
         room: RoomLayout,
     ): String = "created-room"
+
+    override suspend fun deleteFloor(
+        homeId: String,
+        floorId: String,
+    ) = Unit
+
+    override suspend fun deleteRoom(
+        homeId: String,
+        floorId: String,
+        roomId: String,
+    ) = Unit
 }
 
 private class FakeOutletRepository(

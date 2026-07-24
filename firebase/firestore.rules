@@ -102,7 +102,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'name', 'level', 'gridColumns', 'gridRows', 'updatedAt'
           ]);
-        allow delete: if hasRole(homeId, ['OWNER', 'OPERATOR']);
+        allow delete: if hasRole(homeId, ['OWNER']);
 
         match /rooms/{roomId} {
           allow read: if activeMember(homeId);
@@ -113,7 +113,7 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'name', 'column', 'row', 'width', 'height', 'updatedAt'
             ]);
-          allow delete: if hasRole(homeId, ['OWNER', 'OPERATOR']);
+          allow delete: if hasRole(homeId, ['OWNER']);
         }
       }
 
