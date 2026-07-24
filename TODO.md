@@ -8,7 +8,7 @@ completed items should remain checked for release traceability.
 ## P0 — Foundation and vertical slice
 
 - [x] Audit the installed development toolchain and emulator capabilities.
-- [ ] Configure terminal access to the bundled JDK and Android SDK tools.
+- [x] Configure terminal access to the bundled JDK and Android SDK tools.
 - [ ] Create an Android Virtual Device and verify it from the host session.
 - [x] Install and verify the Android foundation on a physical device.
 - [x] Install and authenticate the Firebase CLI.
@@ -19,9 +19,9 @@ completed items should remain checked for release traceability.
 - [x] Scaffold the Kotlin/Compose Android application.
 - [x] Scaffold the React/TypeScript simulator.
 - [x] Configure Firebase projects and the local Emulator Suite.
-- [ ] Implement authentication and initial Firestore Security Rules.
-- [ ] Complete one outlet vertical slice with bidirectional real-time synchronization.
-- [ ] Add automated tests for the outlet state transition and authorization rules.
+- [x] Implement authentication and initial Firestore Security Rules.
+- [x] Complete one outlet vertical slice with bidirectional real-time synchronization.
+- [x] Add automated tests for the outlet state transition and authorization rules.
 
 ## P1 — Core product
 
@@ -41,14 +41,14 @@ completed items should remain checked for release traceability.
 ## P1 — Simulator and integration
 
 - [ ] Display all seeded devices in the hardware simulator.
-- [ ] Reflect cloud commands without refresh.
+- [x] Reflect cloud commands without refresh.
 - [ ] Simulate state changes, errors, disconnects, and reconnects.
 - [ ] Create deterministic seed data with two floors and every device profile.
 - [ ] Add end-to-end tests for Android/backend/simulator data contracts where practical.
 
 ## P1 — Release readiness
 
-- [ ] Review Firestore Security Rules with emulator tests.
+- [x] Review Firestore Security Rules with emulator tests.
 - [ ] Test concurrent changes and repeated backend events.
 - [ ] Test scheduling and safety behavior across timezone boundaries.
 - [ ] Add CI checks for Android, backend, rules, and simulator.
