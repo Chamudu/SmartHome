@@ -71,6 +71,35 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function validDevicePlacement(homeId, data) {
+      let floor = get(
+        /databases/$(database)/documents/homes/$(homeId)/floors/$(data.floorId)
+      ).data;
+
+      return data.floorId is string
+        && (data.roomId == null || data.roomId is string)
+        && data.position.keys().hasOnly(['column', 'row'])
+        && data.position.column is int
+        && data.position.row is int
+        && data.position.column >= 0
+        && data.position.row >= 0
+        && data.position.column < floor.gridColumns
+        && data.position.row < floor.gridRows
+        && (data.roomId == null || validDeviceRoomPlacement(homeId, data));
+    }
+
+    function validDeviceRoomPlacement(homeId, data) {
+      let room = get(
+        /databases/$(database)/documents/homes/$(homeId)/floors/$(data.floorId)/rooms/$(data.roomId)
+      ).data;
+
+      return data.roomId is string
+        && data.position.column >= room.column
+        && data.position.column < room.column + room.width
+        && data.position.row >= room.row
+        && data.position.row < room.row + room.height;
+    }
+
     match /users/{userId} {
       allow read: if signedIn() && request.auth.uid == userId;
       allow create: if signedIn() && request.auth.uid == userId;
@@ -124,7 +153,8 @@ service cloud.firestore {
           && validPowerStatus(request.resource.data.desired.status);
 
         allow update: if ownerOrOperatorDesiredStateUpdate(homeId)
-          || simulatorReportedStateUpdate(homeId);
+          || simulatorReportedStateUpdate(homeId)
+          || ownerOrOperatorPlacementUpdate(homeId);
         allow delete: if hasRole(homeId, ['OWNER']);
 
         match /events/{eventId} {
@@ -156,6 +186,13 @@ service cloud.firestore {
           .hasOnly(['reported', 'commandState', 'updatedAt'])
         && validStatus(request.resource.data.reported.status)
         && request.resource.data.commandState in ['IDLE', 'APPLIED', 'REJECTED'];
+    }
+
+    function ownerOrOperatorPlacementUpdate(homeId) {
+      return hasRole(homeId, ['OWNER', 'OPERATOR'])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['floorId', 'roomId', 'position', 'updatedAt'])
+        && validDevicePlacement(homeId, request.resource.data);
     }
   }
 }

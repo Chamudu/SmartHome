@@ -84,6 +84,27 @@ class FirebaseOutletRepository(
             .await()
     }
 
+    override suspend fun placeOutlet(
+        homeId: String,
+        deviceId: String,
+        floorId: String,
+        roomId: String?,
+        column: Int,
+        row: Int,
+    ) {
+        outletDocument(homeId, deviceId)
+            .update(
+                mapOf(
+                    "floorId" to floorId,
+                    "roomId" to roomId,
+                    "position.column" to column,
+                    "position.row" to row,
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                ),
+            )
+            .await()
+    }
+
     private fun outletDocument(
         homeId: String,
         deviceId: String,
@@ -104,7 +125,19 @@ private fun DocumentSnapshot.toOutletDevice(): OutletDevice {
         commandState = parseCommandState(getString("commandState")),
         desiredRequestId = getString("desired.requestId"),
         reportedRequestId = getString("reported.requestId"),
+        floorId = getString("floorId")
+            ?: throw IllegalStateException("Outlet floor is missing."),
+        roomId = getString("roomId"),
+        column = requiredInt("position.column"),
+        row = requiredInt("position.row"),
     )
+}
+
+private fun DocumentSnapshot.requiredInt(field: String): Int {
+    val value = getLong(field)
+        ?: throw IllegalStateException("$field is missing.")
+    check(value in Int.MIN_VALUE..Int.MAX_VALUE) { "$field is outside the supported range." }
+    return value.toInt()
 }
 
 private fun parsePowerState(value: String?): PowerState {

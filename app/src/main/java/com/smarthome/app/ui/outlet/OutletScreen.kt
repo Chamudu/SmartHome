@@ -55,6 +55,9 @@ fun OutletRoute(
         onRoomCreated = viewModel::createRoom,
         onFloorDeleted = viewModel::deleteSelectedFloor,
         onRoomDeleted = viewModel::deleteRoom,
+        onFloorUpdated = viewModel::updateSelectedFloor,
+        onRoomUpdated = viewModel::updateRoom,
+        onOutletPlaced = viewModel::placeOutlet,
     )
 }
 
@@ -71,6 +74,9 @@ private fun OutletScreen(
     onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
     onFloorDeleted: () -> Unit,
     onRoomDeleted: (String) -> Unit,
+    onFloorUpdated: (String, Int, Int, Int) -> Unit,
+    onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
+    onOutletPlaced: (Int, Int) -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -85,6 +91,9 @@ private fun OutletScreen(
                 onRoomCreated = onRoomCreated,
                 onFloorDeleted = onFloorDeleted,
                 onRoomDeleted = onRoomDeleted,
+                onFloorUpdated = onFloorUpdated,
+                onRoomUpdated = onRoomUpdated,
+                onOutletPlaced = onOutletPlaced,
             )
         } else {
             SignInScreen(
@@ -201,6 +210,9 @@ private fun OutletDashboard(
     onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
     onFloorDeleted: () -> Unit,
     onRoomDeleted: (String) -> Unit,
+    onFloorUpdated: (String, Int, Int, Int) -> Unit,
+    onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
+    onOutletPlaced: (Int, Int) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -238,6 +250,9 @@ private fun OutletDashboard(
             onRoomCreated = onRoomCreated,
             onFloorDeleted = onFloorDeleted,
             onRoomDeleted = onRoomDeleted,
+            onFloorUpdated = onFloorUpdated,
+            onRoomUpdated = onRoomUpdated,
+            onOutletPlaced = onOutletPlaced,
         )
 
         Spacer(modifier = Modifier.height(24.dp))

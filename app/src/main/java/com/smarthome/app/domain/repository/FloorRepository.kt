@@ -26,6 +26,17 @@ interface FloorRepository {
         room: RoomLayout,
     ): String
 
+    suspend fun updateFloor(
+        homeId: String,
+        floor: FloorPlan,
+    )
+
+    suspend fun updateRoom(
+        homeId: String,
+        floorId: String,
+        room: RoomLayout,
+    )
+
     suspend fun deleteFloor(
         homeId: String,
         floorId: String,
@@ -40,4 +51,8 @@ interface FloorRepository {
 
 class FloorContainsDevicesException : IllegalStateException(
     "Move or remove devices before deleting this floor.",
+)
+
+class RoomContainsDevicesException : IllegalStateException(
+    "Move devices out of this room before deleting it.",
 )

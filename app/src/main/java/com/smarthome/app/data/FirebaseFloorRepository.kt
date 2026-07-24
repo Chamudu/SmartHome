@@ -7,6 +7,7 @@ import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.FloorContainsDevicesException
+import com.smarthome.app.domain.repository.RoomContainsDevicesException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -122,6 +123,44 @@ class FirebaseFloorRepository(
             .id
     }
 
+    override suspend fun updateFloor(
+        homeId: String,
+        floor: FloorPlan,
+    ) {
+        floorsCollection(homeId)
+            .document(floor.id)
+            .update(
+                mapOf(
+                    "name" to floor.name.trim(),
+                    "level" to floor.level,
+                    "gridColumns" to floor.gridColumns,
+                    "gridRows" to floor.gridRows,
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                ),
+            )
+            .await()
+    }
+
+    override suspend fun updateRoom(
+        homeId: String,
+        floorId: String,
+        room: RoomLayout,
+    ) {
+        roomsCollection(homeId, floorId)
+            .document(room.id)
+            .update(
+                mapOf(
+                    "name" to room.name.trim(),
+                    "column" to room.column,
+                    "row" to room.row,
+                    "width" to room.width,
+                    "height" to room.height,
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                ),
+            )
+            .await()
+    }
+
     override suspend fun deleteFloor(
         homeId: String,
         floorId: String,
@@ -157,6 +196,19 @@ class FirebaseFloorRepository(
         floorId: String,
         roomId: String,
     ) {
+        val assignedDevices = firestore
+            .collection("homes")
+            .document(homeId)
+            .collection("devices")
+            .whereEqualTo("roomId", roomId)
+            .limit(1)
+            .get()
+            .await()
+
+        if (!assignedDevices.isEmpty) {
+            throw RoomContainsDevicesException()
+        }
+
         roomsCollection(homeId, floorId)
             .document(roomId)
             .delete()

@@ -11,6 +11,7 @@ import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.FloorContainsDevicesException
+import com.smarthome.app.domain.repository.RoomContainsDevicesException
 import com.smarthome.app.domain.repository.OutletRepository
 import com.smarthome.app.domain.validation.FloorLayoutValidator
 import kotlinx.coroutines.Job
@@ -313,6 +314,118 @@ class OutletViewModel(
         }
     }
 
+    fun updateSelectedFloor(
+        name: String,
+        level: Int,
+        gridColumns: Int,
+        gridRows: Int,
+    ) {
+        val current = mutableUiState.value.selectedFloor ?: return
+        val updated = current.copy(
+            name = name,
+            level = level,
+            gridColumns = gridColumns,
+            gridRows = gridRows,
+        )
+        val violations = FloorLayoutValidator.validateFloor(
+            name = name,
+            level = level,
+            gridColumns = gridColumns,
+            gridRows = gridRows,
+            existingFloors = mutableUiState.value.floors,
+            editingFloorId = current.id,
+        ).toMutableSet()
+
+        current.rooms.forEach { room ->
+            violations += FloorLayoutValidator.validateRoom(updated, room)
+        }
+        mutableUiState.value.outlet
+            ?.takeIf { outlet -> outlet.floorId == current.id }
+            ?.let { outlet ->
+                violations += FloorLayoutValidator.validateDevicePosition(
+                    updated,
+                    outlet.column,
+                    outlet.row,
+                )
+            }
+
+        if (violations.isNotEmpty()) {
+            mutableUiState.update { it.copy(layoutMessage = violations.toMessage()) }
+            return
+        }
+
+        saveLayout(
+            action = { floorRepository.updateFloor(HOME_ID, updated) },
+            successMessage = "Floor updated.",
+            failureMessage = "The floor could not be updated.",
+        )
+    }
+
+    fun updateRoom(
+        roomId: String,
+        name: String,
+        column: Int,
+        row: Int,
+        width: Int,
+        height: Int,
+    ) {
+        val floor = mutableUiState.value.selectedFloor ?: return
+        val room = RoomLayout(roomId, name, column, row, width, height)
+        val violations = FloorLayoutValidator.validateRoom(floor, room)
+            .toMutableSet()
+        mutableUiState.value.outlet
+            ?.takeIf { outlet -> outlet.roomId == roomId }
+            ?.takeUnless { outlet ->
+                outlet.column in room.column until room.right &&
+                    outlet.row in room.row until room.bottom
+            }
+            ?.let {
+                violations += LayoutViolation.DEVICE_POSITION_OUTSIDE_ROOM
+            }
+        if (violations.isNotEmpty()) {
+            mutableUiState.update { it.copy(layoutMessage = violations.toMessage()) }
+            return
+        }
+
+        saveLayout(
+            action = { floorRepository.updateRoom(HOME_ID, floor.id, room) },
+            successMessage = "Room updated.",
+            failureMessage = "The room could not be updated.",
+        )
+    }
+
+    fun placeOutlet(
+        column: Int,
+        row: Int,
+    ) {
+        val floor = mutableUiState.value.selectedFloor ?: return
+        val violations = FloorLayoutValidator.validateDevicePosition(floor, column, row)
+        if (violations.isNotEmpty()) {
+            mutableUiState.update { it.copy(layoutMessage = violations.toMessage()) }
+            return
+        }
+
+        val roomId = floor.rooms.firstOrNull { room ->
+            column in room.column until room.right &&
+                row in room.row until room.bottom
+        }?.id
+
+        saveLayout(
+            action = {
+                repository.placeOutlet(
+                    homeId = HOME_ID,
+                    deviceId = OUTLET_ID,
+                    floorId = floor.id,
+                    roomId = roomId,
+                    column = column,
+                    row = row,
+                )
+            },
+            successMessage = "Outlet placed.",
+            failureMessage = "The outlet could not be placed.",
+        )
+    }
+
     fun deleteSelectedFloor() {
         val floorId = mutableUiState.value.selectedFloorId ?: return
         if (mutableUiState.value.isSavingLayout) return
@@ -365,11 +478,16 @@ class OutletViewModel(
                         layoutMessage = "Room deleted.",
                     )
                 }
-            }.onFailure {
+            }.onFailure { exception ->
+                val message = if (exception is RoomContainsDevicesException) {
+                    exception.message
+                } else {
+                    "The room could not be deleted."
+                }
                 mutableUiState.update { state ->
                     state.copy(
                         isSavingLayout = false,
-                        layoutMessage = "The room could not be deleted.",
+                        layoutMessage = message,
                     )
                 }
             }
@@ -504,6 +622,29 @@ class OutletViewModel(
         }
     }
 
+    private fun saveLayout(
+        action: suspend () -> Unit,
+        successMessage: String,
+        failureMessage: String,
+    ) {
+        if (mutableUiState.value.isSavingLayout) return
+
+        viewModelScope.launch {
+            mutableUiState.update { it.copy(isSavingLayout = true, layoutMessage = null) }
+            runCatching { action() }
+                .onSuccess {
+                    mutableUiState.update {
+                        it.copy(isSavingLayout = false, layoutMessage = successMessage)
+                    }
+                }
+                .onFailure {
+                    mutableUiState.update {
+                        it.copy(isSavingLayout = false, layoutMessage = failureMessage)
+                    }
+                }
+        }
+    }
+
     private companion object {
         const val HOME_ID = "demo-home"
         const val OUTLET_ID = "main-outlet"
@@ -525,6 +666,8 @@ private fun Set<LayoutViolation>.toMessage(): String {
         LayoutViolation.ROOM_SIZE_NOT_POSITIVE in this -> "Room width and height must be positive."
         LayoutViolation.ROOM_OUTSIDE_FLOOR in this -> "The room extends beyond the floor grid."
         LayoutViolation.ROOM_OVERLAPS_EXISTING in this -> "The room overlaps an existing room."
+        LayoutViolation.DEVICE_POSITION_OUTSIDE_FLOOR in this -> "The device position is outside the floor grid."
+        LayoutViolation.DEVICE_POSITION_OUTSIDE_ROOM in this -> "The assigned outlet must remain inside this room."
         else -> "The layout values are invalid."
     }
 }

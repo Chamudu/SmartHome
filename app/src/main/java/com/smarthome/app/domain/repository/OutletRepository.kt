@@ -24,4 +24,13 @@ interface OutletRepository {
         deviceId: String,
         powerState: PowerState,
     )
+
+    suspend fun placeOutlet(
+        homeId: String,
+        deviceId: String,
+        floorId: String,
+        roomId: String?,
+        column: Int,
+        row: Int,
+    )
 }

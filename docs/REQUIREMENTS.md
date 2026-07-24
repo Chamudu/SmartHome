@@ -67,6 +67,8 @@ Acceptance criteria:
 - A room has a name, origin coordinate, width, and height expressed in grid cells.
 - A room cannot extend beyond the floor boundary.
 - A room cannot overlap another room on the same floor.
+- Editing a room cannot leave an assigned device outside its new boundary.
+- Removing a room requires confirmation and cannot leave orphaned device references.
 - Valid layout edits persist and appear on other subscribed clients without refresh.
 
 #### FLOOR-03 — Place devices (P1)
@@ -76,6 +78,7 @@ A user shall be able to place a device at a valid grid coordinate on a floor.
 Acceptance criteria:
 
 - A device marker cannot be placed outside the floor grid.
+- When a marker is inside a room, the stored placement references that room.
 - The marker is rendered at the same logical coordinate after screen resize or orientation change.
 - Selecting a marker opens the device summary or controls.
 

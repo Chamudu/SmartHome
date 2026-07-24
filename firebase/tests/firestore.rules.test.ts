@@ -90,6 +90,27 @@ beforeEach(async () => {
       },
     )
 
+    await setDoc(
+      doc(
+        database,
+        'homes',
+        HOME_ID,
+        'floors',
+        'ground-floor',
+        'rooms',
+        'utility',
+      ),
+      {
+        name: 'Utility',
+        column: 0,
+        row: 0,
+        width: 4,
+        height: 4,
+        createdAt: now,
+        updatedAt: now,
+      },
+    )
+
     await setDoc(outletReference(database), {
       name: 'Main outlet',
       profile: 'OUTLET',
@@ -301,6 +322,64 @@ describe('floor layout authorization and validation', () => {
         gridColumns: 10,
         gridRows: 10,
         createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    )
+  })
+})
+
+describe('device placement validation', () => {
+  it('allows an owner to place a device inside a floor grid', async () => {
+    const database =
+      testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertSucceeds(
+      updateDoc(outletReference(database), {
+        floorId: 'ground-floor',
+        roomId: null,
+        position: { column: 3, row: 4 },
+        updatedAt: new Date(),
+      }),
+    )
+  })
+
+  it('allows an owner to place a device inside its assigned room', async () => {
+    const database =
+      testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertSucceeds(
+      updateDoc(outletReference(database), {
+        floorId: 'ground-floor',
+        roomId: 'utility',
+        position: { column: 2, row: 3 },
+        updatedAt: new Date(),
+      }),
+    )
+  })
+
+  it('denies a device position outside its assigned room', async () => {
+    const database =
+      testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertFails(
+      updateDoc(outletReference(database), {
+        floorId: 'ground-floor',
+        roomId: 'utility',
+        position: { column: 5, row: 5 },
+        updatedAt: new Date(),
+      }),
+    )
+  })
+
+  it('denies a device position outside the floor grid', async () => {
+    const database =
+      testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertFails(
+      updateDoc(outletReference(database), {
+        floorId: 'ground-floor',
+        roomId: null,
+        position: { column: 12, row: 16 },
         updatedAt: new Date(),
       }),
     )

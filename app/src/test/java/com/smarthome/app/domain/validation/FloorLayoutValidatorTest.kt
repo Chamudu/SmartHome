@@ -163,6 +163,26 @@ class FloorLayoutValidatorTest {
         assertTrue(violations.isEmpty())
     }
 
+    @Test
+    fun `device position must remain inside floor grid`() {
+        assertTrue(
+            FloorLayoutValidator.validateDevicePosition(
+                floor(),
+                column = 11,
+                row = 15,
+            ).isEmpty(),
+        )
+
+        assertEquals(
+            setOf(LayoutViolation.DEVICE_POSITION_OUTSIDE_FLOOR),
+            FloorLayoutValidator.validateDevicePosition(
+                floor(),
+                column = 12,
+                row = 16,
+            ),
+        )
+    }
+
     private fun floor(
         rooms: List<RoomLayout> = emptyList(),
     ) = FloorPlan(

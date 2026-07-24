@@ -136,6 +136,9 @@ Security Rules.
 Boundary and overlap checks run in domain logic for immediate feedback. A trusted backend transaction
 must revalidate layout mutations when strict concurrent-edit protection is required.
 
+Room assignment is optional for a device, but when `roomId` is present, Security Rules require the room
+to exist under the selected floor and require the device coordinate to lie inside that room.
+
 For the simple-house model, each floor uses a unique level: `-1` represents a basement, `0` the ground
 floor, and positive values represent floors above ground. Separate wings at one elevation should be
 represented within one floor plan rather than as duplicate levels.
@@ -269,6 +272,8 @@ Indexes are added only for implemented queries. Expected composite indexes inclu
 
 ## Deletion policy
 
-The MVP uses explicit, confirmed deletion for empty floors. A floor containing rooms or devices must be
-cleared or migrated first. Device removal should use a trusted cascade or soft-deletion workflow before
-event history becomes operationally important; recursive client deletion is not permitted.
+Deletion is explicit and confirmed. A floor with assigned devices cannot be deleted; its rooms and floor
+document are otherwise removed together in one client write batch. A room with an assigned device cannot
+be deleted until that device is moved. The client performs these reference checks for the current MVP.
+A trusted backend transaction or soft-deletion workflow should own cascades once multiple simultaneous
+layout editors or operational event history are supported.

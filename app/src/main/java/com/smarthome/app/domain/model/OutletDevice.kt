@@ -20,6 +20,10 @@ data class OutletDevice(
     val commandState: CommandState,
     val desiredRequestId: String?,
     val reportedRequestId: String?,
+    val floorId: String,
+    val roomId: String?,
+    val column: Int,
+    val row: Int,
 ) {
     val isCommandPending: Boolean
         get() = commandState == CommandState.PENDING

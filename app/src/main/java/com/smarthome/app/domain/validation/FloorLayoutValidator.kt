@@ -14,12 +14,16 @@ object FloorLayoutValidator {
         gridColumns: Int,
         gridRows: Int,
         existingFloors: List<FloorPlan> = emptyList(),
+        editingFloorId: String? = null,
     ): Set<LayoutViolation> = buildSet {
         if (name.isBlank()) {
             add(LayoutViolation.FLOOR_NAME_BLANK)
         }
 
-        if (existingFloors.any { floor -> floor.level == level }) {
+        if (existingFloors.any { floor ->
+                floor.level == level && floor.id != editingFloorId
+            }
+        ) {
             add(LayoutViolation.FLOOR_LEVEL_DUPLICATE)
         }
 
@@ -68,6 +72,18 @@ object FloorLayoutValidator {
                 .any { room -> room.overlaps(candidate) }
         ) {
             add(LayoutViolation.ROOM_OVERLAPS_EXISTING)
+        }
+    }
+
+    fun validateDevicePosition(
+        floor: FloorPlan,
+        column: Int,
+        row: Int,
+    ): Set<LayoutViolation> = buildSet {
+        if (column !in 0 until floor.gridColumns ||
+            row !in 0 until floor.gridRows
+        ) {
+            add(LayoutViolation.DEVICE_POSITION_OUTSIDE_FLOOR)
         }
     }
 }
