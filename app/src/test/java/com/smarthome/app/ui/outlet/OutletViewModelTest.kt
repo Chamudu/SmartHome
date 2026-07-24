@@ -2,8 +2,11 @@ package com.smarthome.app.ui.outlet
 
 import com.smarthome.app.domain.model.CommandState
 import com.smarthome.app.domain.model.DeviceStatus
+import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
+import com.smarthome.app.domain.model.RoomLayout
+import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.OutletRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,7 +33,10 @@ class OutletViewModelTest {
 
         try {
             val repository = FakeOutletRepository()
-            val viewModel = OutletViewModel(repository)
+            val viewModel = OutletViewModel(
+                repository = repository,
+                floorRepository = FakeFloorRepository(),
+            )
 
             viewModel.updateEmail(" owner@smarthome.test ")
             viewModel.updatePassword("secret-password")
@@ -62,7 +68,10 @@ class OutletViewModelTest {
             val repository = FakeOutletRepository(
                 hasAuthenticatedUser = true,
             )
-            val viewModel = OutletViewModel(repository)
+            val viewModel = OutletViewModel(
+                repository = repository,
+                floorRepository = FakeFloorRepository(),
+            )
             advanceUntilIdle()
 
             repository.emit(outlet())
@@ -89,7 +98,10 @@ class OutletViewModelTest {
             val repository = FakeOutletRepository(
                 hasAuthenticatedUser = true,
             )
-            val viewModel = OutletViewModel(repository)
+            val viewModel = OutletViewModel(
+                repository = repository,
+                floorRepository = FakeFloorRepository(),
+            )
             advanceUntilIdle()
 
             repository.emit(
@@ -108,6 +120,46 @@ class OutletViewModelTest {
         }
     }
 
+    @Test
+    fun `placing outlet infers containing room and forwards logical coordinate`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val outletRepository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val floorRepository = FakeFloorRepository()
+            val viewModel = OutletViewModel(outletRepository, floorRepository)
+
+            floorRepository.emitFloors(listOf(floor()))
+            advanceUntilIdle()
+            floorRepository.emitRooms(
+                listOf(RoomLayout("kitchen", "Kitchen", 0, 0, 4, 4)),
+            )
+            advanceUntilIdle()
+
+            viewModel.placeOutlet(column = 2, row = 3)
+            advanceUntilIdle()
+
+            assertEquals(
+                DevicePlacement("ground-floor", "kitchen", 2, 3),
+                outletRepository.placement,
+            )
+            assertEquals("Outlet placed.", viewModel.uiState.value.layoutMessage)
+
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    private fun floor() = FloorPlan(
+        id = "ground-floor",
+        name = "Ground floor",
+        level = 0,
+        gridColumns = 12,
+        gridRows = 16,
+    )
+
     private fun outlet(
         reportedStatus: DeviceStatus = DeviceStatus.OFF,
     ) = OutletDevice(
@@ -118,8 +170,75 @@ class OutletViewModelTest {
         commandState = CommandState.IDLE,
         desiredRequestId = null,
         reportedRequestId = null,
+        floorId = "ground-floor",
+        roomId = "utility",
+        column = 1,
+        row = 1,
     )
 }
+
+private class FakeFloorRepository : FloorRepository {
+    private val floors = MutableSharedFlow<List<FloorPlan>>(replay = 1)
+    private val rooms = MutableSharedFlow<List<RoomLayout>>(replay = 1)
+
+    override fun observeFloors(homeId: String): Flow<List<FloorPlan>> = floors
+
+    override fun observeRooms(
+        homeId: String,
+        floorId: String,
+    ): Flow<List<RoomLayout>> = rooms
+
+    override suspend fun createFloor(
+        homeId: String,
+        name: String,
+        level: Int,
+        gridColumns: Int,
+        gridRows: Int,
+    ): String = "created-floor"
+
+    override suspend fun createRoom(
+        homeId: String,
+        floorId: String,
+        room: RoomLayout,
+    ): String = "created-room"
+
+    override suspend fun updateFloor(
+        homeId: String,
+        floor: FloorPlan,
+    ) = Unit
+
+    override suspend fun updateRoom(
+        homeId: String,
+        floorId: String,
+        room: RoomLayout,
+    ) = Unit
+
+    override suspend fun deleteFloor(
+        homeId: String,
+        floorId: String,
+    ) = Unit
+
+    override suspend fun deleteRoom(
+        homeId: String,
+        floorId: String,
+        roomId: String,
+    ) = Unit
+
+    suspend fun emitFloors(value: List<FloorPlan>) {
+        floors.emit(value)
+    }
+
+    suspend fun emitRooms(value: List<RoomLayout>) {
+        rooms.emit(value)
+    }
+}
+
+private data class DevicePlacement(
+    val floorId: String,
+    val roomId: String?,
+    val column: Int,
+    val row: Int,
+)
 
 private class FakeOutletRepository(
     override var hasAuthenticatedUser: Boolean = false,
@@ -130,6 +249,9 @@ private class FakeOutletRepository(
         private set
 
     var requestedPowerState: PowerState? = null
+        private set
+
+    var placement: DevicePlacement? = null
         private set
 
     override suspend fun signIn(
@@ -155,6 +277,17 @@ private class FakeOutletRepository(
         powerState: PowerState,
     ) {
         requestedPowerState = powerState
+    }
+
+    override suspend fun placeOutlet(
+        homeId: String,
+        deviceId: String,
+        floorId: String,
+        roomId: String?,
+        column: Int,
+        row: Int,
+    ) {
+        placement = DevicePlacement(floorId, roomId, column, row)
     }
 
     suspend fun emit(outlet: OutletDevice) {

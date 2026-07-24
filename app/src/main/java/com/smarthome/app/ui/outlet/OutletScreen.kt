@@ -50,6 +50,14 @@ fun OutletRoute(
         onSignIn = viewModel::signIn,
         onSignOut = viewModel::signOut,
         onPowerStateRequested = viewModel::requestPowerState,
+        onFloorSelected = viewModel::selectFloor,
+        onFloorCreated = viewModel::createFloor,
+        onRoomCreated = viewModel::createRoom,
+        onFloorDeleted = viewModel::deleteSelectedFloor,
+        onRoomDeleted = viewModel::deleteRoom,
+        onFloorUpdated = viewModel::updateSelectedFloor,
+        onRoomUpdated = viewModel::updateRoom,
+        onOutletPlaced = viewModel::placeOutlet,
     )
 }
 
@@ -61,6 +69,14 @@ private fun OutletScreen(
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onPowerStateRequested: (PowerState) -> Unit,
+    onFloorSelected: (String) -> Unit,
+    onFloorCreated: (String, Int, Int, Int) -> Unit,
+    onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
+    onFloorDeleted: () -> Unit,
+    onRoomDeleted: (String) -> Unit,
+    onFloorUpdated: (String, Int, Int, Int) -> Unit,
+    onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
+    onOutletPlaced: (Int, Int) -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -70,6 +86,14 @@ private fun OutletScreen(
                 state = state,
                 onSignOut = onSignOut,
                 onPowerStateRequested = onPowerStateRequested,
+                onFloorSelected = onFloorSelected,
+                onFloorCreated = onFloorCreated,
+                onRoomCreated = onRoomCreated,
+                onFloorDeleted = onFloorDeleted,
+                onRoomDeleted = onRoomDeleted,
+                onFloorUpdated = onFloorUpdated,
+                onRoomUpdated = onRoomUpdated,
+                onOutletPlaced = onOutletPlaced,
             )
         } else {
             SignInScreen(
@@ -181,6 +205,14 @@ private fun OutletDashboard(
     state: OutletUiState,
     onSignOut: () -> Unit,
     onPowerStateRequested: (PowerState) -> Unit,
+    onFloorSelected: (String) -> Unit,
+    onFloorCreated: (String, Int, Int, Int) -> Unit,
+    onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
+    onFloorDeleted: () -> Unit,
+    onRoomDeleted: (String) -> Unit,
+    onFloorUpdated: (String, Int, Int, Int) -> Unit,
+    onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
+    onOutletPlaced: (Int, Int) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -210,6 +242,27 @@ private fun OutletDashboard(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        FloorDashboardSection(
+            state = state,
+            onFloorSelected = onFloorSelected,
+            onFloorCreated = onFloorCreated,
+            onRoomCreated = onRoomCreated,
+            onFloorDeleted = onFloorDeleted,
+            onRoomDeleted = onRoomDeleted,
+            onFloorUpdated = onFloorUpdated,
+            onRoomUpdated = onRoomUpdated,
+            onOutletPlaced = onOutletPlaced,
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Devices",
+            style = MaterialTheme.typography.titleLarge,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         when {
             state.isLoadingOutlet -> {

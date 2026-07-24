@@ -28,6 +28,78 @@ service cloud.firestore {
       return status in ['ON', 'OFF'];
     }
 
+    function validFloorData(data) {
+      return data.keys().hasOnly([
+          'name', 'level', 'gridColumns', 'gridRows', 'createdAt', 'updatedAt'
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && data.level is int
+        && data.gridColumns is int
+        && data.gridColumns >= 4
+        && data.gridColumns <= 40
+        && data.gridRows is int
+        && data.gridRows >= 4
+        && data.gridRows <= 40
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validRoomData(homeId, floorId, data) {
+      let floor = get(
+        /databases/$(database)/documents/homes/$(homeId)/floors/$(floorId)
+      ).data;
+
+      return data.keys().hasOnly([
+          'name', 'column', 'row', 'width', 'height', 'createdAt', 'updatedAt'
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && data.column is int
+        && data.column >= 0
+        && data.row is int
+        && data.row >= 0
+        && data.width is int
+        && data.width > 0
+        && data.height is int
+        && data.height > 0
+        && data.column + data.width <= floor.gridColumns
+        && data.row + data.height <= floor.gridRows
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validDevicePlacement(homeId, data) {
+      let floor = get(
+        /databases/$(database)/documents/homes/$(homeId)/floors/$(data.floorId)
+      ).data;
+
+      return data.floorId is string
+        && (data.roomId == null || data.roomId is string)
+        && data.position.keys().hasOnly(['column', 'row'])
+        && data.position.column is int
+        && data.position.row is int
+        && data.position.column >= 0
+        && data.position.row >= 0
+        && data.position.column < floor.gridColumns
+        && data.position.row < floor.gridRows
+        && (data.roomId == null || validDeviceRoomPlacement(homeId, data));
+    }
+
+    function validDeviceRoomPlacement(homeId, data) {
+      let room = get(
+        /databases/$(database)/documents/homes/$(homeId)/floors/$(data.floorId)/rooms/$(data.roomId)
+      ).data;
+
+      return data.roomId is string
+        && data.position.column >= room.column
+        && data.position.column < room.column + room.width
+        && data.position.row >= room.row
+        && data.position.row < room.row + room.height;
+    }
+
     match /users/{userId} {
       allow read: if signedIn() && request.auth.uid == userId;
       allow create: if signedIn() && request.auth.uid == userId;
@@ -52,11 +124,25 @@ service cloud.firestore {
 
       match /floors/{floorId} {
         allow read: if activeMember(homeId);
-        allow write: if hasRole(homeId, ['OWNER', 'OPERATOR']);
+        allow create: if hasRole(homeId, ['OWNER', 'OPERATOR'])
+          && validFloorData(request.resource.data);
+        allow update: if hasRole(homeId, ['OWNER', 'OPERATOR'])
+          && validFloorData(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'level', 'gridColumns', 'gridRows', 'updatedAt'
+          ]);
+        allow delete: if hasRole(homeId, ['OWNER']);
 
         match /rooms/{roomId} {
           allow read: if activeMember(homeId);
-          allow write: if hasRole(homeId, ['OWNER', 'OPERATOR']);
+          allow create: if hasRole(homeId, ['OWNER', 'OPERATOR'])
+            && validRoomData(homeId, floorId, request.resource.data);
+          allow update: if hasRole(homeId, ['OWNER', 'OPERATOR'])
+            && validRoomData(homeId, floorId, request.resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'name', 'column', 'row', 'width', 'height', 'updatedAt'
+            ]);
+          allow delete: if hasRole(homeId, ['OWNER']);
         }
       }
 
@@ -67,7 +153,8 @@ service cloud.firestore {
           && validPowerStatus(request.resource.data.desired.status);
 
         allow update: if ownerOrOperatorDesiredStateUpdate(homeId)
-          || simulatorReportedStateUpdate(homeId);
+          || simulatorReportedStateUpdate(homeId)
+          || ownerOrOperatorPlacementUpdate(homeId);
         allow delete: if hasRole(homeId, ['OWNER']);
 
         match /events/{eventId} {
@@ -99,6 +186,13 @@ service cloud.firestore {
           .hasOnly(['reported', 'commandState', 'updatedAt'])
         && validStatus(request.resource.data.reported.status)
         && request.resource.data.commandState in ['IDLE', 'APPLIED', 'REJECTED'];
+    }
+
+    function ownerOrOperatorPlacementUpdate(homeId) {
+      return hasRole(homeId, ['OWNER', 'OPERATOR'])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['floorId', 'roomId', 'position', 'updatedAt'])
+        && validDevicePlacement(homeId, request.resource.data);
     }
   }
 }

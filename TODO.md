@@ -25,10 +25,10 @@ completed items should remain checked for release traceability.
 
 ## P1 — Core product
 
-- [ ] Implement floor creation, renaming, selection, and removal.
-- [ ] Implement grid configuration and rectangular room editing.
-- [ ] Validate room boundaries and prevent overlaps.
-- [ ] Implement device placement and status indicators.
+- [x] Implement floor creation, renaming, selection, and removal.
+- [x] Implement grid configuration and rectangular room editing.
+- [x] Validate room boundaries and prevent overlaps.
+- [x] Implement device placement and status indicators for the outlet vertical slice.
 - [ ] Implement variable-channel switch units.
 - [ ] Implement safety-critical device configuration.
 - [ ] Implement the trusted maximum-duration cutoff.
