@@ -1,0 +1,50 @@
+# Code Map
+
+## Android request and data flow
+
+```text
+Compose event
+  → OutletViewModel validation/state
+  → repository interface
+  → Firebase implementation
+  → Firestore Security Rules
+  → snapshot listener / Flow
+  → StateFlow
+  → lifecycle-aware Compose recomposition
+```
+
+## Android source responsibilities
+
+| Source | Responsibility |
+| --- | --- |
+| `MainActivity.kt` | Android entry point and root theme/application composition |
+| `DeviceStatus.kt` | Operational status and whether normal power commands are safe |
+| `OutletDevice.kt` | Proven outlet twin, power state, command state, and pending/control derivations |
+| `SmartDevice.kt` | Shared profile discriminator, sealed configuration, device view, and creation request |
+| `FloorPlan.kt` | Floor, half-open room rectangles, computed edges, and validation violations |
+| `FloorLayoutValidator.kt` | Pure floor, room, overlap, and device-coordinate validation |
+| `OutletRepository.kt` | Authentication, device observation/creation/control/placement boundary |
+| `FloorRepository.kt` | Floor and room observation and mutation boundary |
+| `FirebaseOutletRepository.kt` | Firebase Auth, device listeners, mapping, creation, commands, and placement |
+| `FirebaseFloorRepository.kt` | Floor/room listeners, mapping, writes, deletion reference checks, and batch cascade |
+| `OutletViewModel.kt` | Screen state, listener lifecycle, validation, selection, and user-action orchestration |
+| `OutletScreen.kt` | Authentication, dashboard, device summaries, outlet controls, and status presentation |
+| `FloorDashboardSection.kt` | Floor selector/grid, gestures, previews, CRUD dialogs, and Add Device form |
+| `Theme.kt` | Branded light/dark Material 3 color schemes |
+
+## Simulator responsibilities
+
+| Source | Responsibility |
+| --- | --- |
+| `firebase.ts` | Reads local Vite environment configuration and initializes Auth/Firestore |
+| `types.ts` | TypeScript twin/status contract for the current outlet |
+| `useOutletSimulator.ts` | Auth lifecycle, real-time listener, automatic acknowledgement, and hardware reports |
+| `App.tsx` | Configuration, sign-in, connection state, telemetry, and simulator controls |
+| `App.css` / `index.css` | Responsive diagnostic-console presentation and global styling |
+
+## Firebase responsibility
+
+`firebase/firestore.rules` denies unmatched access, resolves home membership, separates owner/operator
+desired writes from simulator reported writes, validates floor/room geometry shape, validates placement,
+and enforces complete profile-specific creation documents. Emulator tests seed trusted fixtures with
+rules disabled, then make assertions through real authenticated rule contexts.

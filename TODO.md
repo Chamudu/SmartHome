@@ -64,6 +64,8 @@ completed items should remain checked for release traceability.
 ## P2 — Time permitting
 
 - [ ] Add Firebase Cloud Messaging push notifications.
+- [ ] Add an optional Android camera-node mode that captures snapshots on a second phone and uploads
+  them to Firebase Storage with Firestore metadata.
 - [ ] Make the complete demonstration runnable offline with Firebase emulators.
 - [ ] Add floor-plan background image upload.
 - [ ] Add energy and estimated-cost reporting.

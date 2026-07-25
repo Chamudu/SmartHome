@@ -231,3 +231,21 @@ manual refresh and prevent normal power commands until the reported state return
 - The owner account cannot directly forge reported hardware state.
 - Android commands appear in the simulator without a manual refresh.
 - Simulator confirmations and error states appear in Android without a manual refresh.
+
+## 10. Verify layout and device creation
+
+The Android owner can create floor and room documents, then create any supported device profile from a
+valid grid coordinate. Device creation initializes a complete safe `OFF`/`IDLE` twin and profile config
+in one write. The deployed rules validate authorization, floor/room containment, channel count, safety
+duration, schedule structure, and HTTPS camera media.
+
+Current profile creation checks:
+
+- `OUTLET`: empty config
+- `MULTI_SWITCH`: two, three, or five initialized channel records
+- `SAFETY_OUTLET`: maximum on-duration from 60 to 14,400 seconds
+- `LIGHT`: disabled default schedule with local times and `Asia/Colombo`
+- `CAMERA`: snapshot media with an HTTPS URI and server capture timestamp
+
+The repeatable automated seed script is still pending. Until it exists, use the authenticated Android
+creation flow or trusted Firebase Console/Admin tooling for initial data.

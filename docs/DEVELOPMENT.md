@@ -6,6 +6,8 @@
 - JDK 17 or newer; the Android Studio bundled JDK is supported
 - Android SDK Platform 37 and Build Tools 36.0.0 or newer
 - A physical Android device with API 26 or newer, or a compatible emulator
+- Node.js 22 for Firebase CLI and simulator development
+- Firebase CLI 15 or compatible
 
 The project uses the Gradle Wrapper. A system-wide Gradle installation is not required.
 
@@ -22,8 +24,8 @@ Do not commit this file because the SDK location varies by machine.
 ## Build and test
 
 ```bash
-./gradlew test
-./gradlew assembleDebug
+./gradlew :app:testDebugUnitTest
+./gradlew :app:assembleDebug
 ```
 
 The debug APK is generated at:
@@ -35,7 +37,7 @@ app/build/outputs/apk/debug/app-debug.apk
 Run both checks together with:
 
 ```bash
-./gradlew test assembleDebug
+./gradlew :app:testDebugUnitTest :app:assembleDebug
 ```
 
 ## Run on a physical Android device
@@ -71,7 +73,24 @@ Manager. USB is preferred for the initial setup because it removes network and p
 
 | Module | Purpose |
 | --- | --- |
-| `app` | Native Android application, Compose UI, domain logic, and Android tests |
+| `app` | Native Android application, Compose UI, domain logic, Firebase repositories, and Android tests |
+| `simulator` | React/TypeScript hardware console using the Firebase Web SDK |
+| `firebase/tests` | Vitest suite for Firestore Security Rules through the local emulator |
 
-Backend and simulator modules will be added as independent components after the Android foundation is
-stable.
+## Simulator checks
+
+```bash
+npm --prefix simulator run typecheck
+npm --prefix simulator run lint
+npm --prefix simulator run build
+```
+
+## Firestore rule checks
+
+```bash
+firebase emulators:exec --project demo-smart-home --only firestore \
+  "npm --prefix firebase/tests test"
+```
+
+Use a `demo-` project ID for rule tests so the Firebase CLI cannot accidentally access production
+services when an emulator is missing.
