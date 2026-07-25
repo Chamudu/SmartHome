@@ -145,13 +145,12 @@ createdAt: <timestamp>
 updatedAt: <timestamp>
 ```
 
-## 6. Configure the simulator identifiers
+## 6. Configure the simulator home
 
-The default values in `.env.example` match the seeded paths:
+The default value in `.env.example` matches the seeded home path:
 
 ```dotenv
 VITE_FIREBASE_HOME_ID=demo-home
-VITE_FIREBASE_OUTLET_ID=main-outlet
 ```
 
 Start the simulator and sign in with the dedicated simulator account:
@@ -247,5 +246,7 @@ Current profile creation checks:
 - `LIGHT`: disabled default schedule with local times and `Asia/Colombo`
 - `CAMERA`: snapshot media with an HTTPS URI and server capture timestamp
 
-The repeatable automated seed script is still pending. Until it exists, use the authenticated Android
-creation flow or trusted Firebase Console/Admin tooling for initial data.
+The repeatable authenticated seed tool is `simulator/scripts/seed-demo.mjs`. It requires Firebase web
+configuration and owner credentials through process environment variables listed in
+`firebase/seed.example`; values are never committed. The tool skips existing fixed IDs and uses the same
+Security Rules as Android rather than bypassing authorization with a service account.

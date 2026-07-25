@@ -85,6 +85,19 @@ npm --prefix simulator run lint
 npm --prefix simulator run build
 ```
 
+## Seed the demonstration home
+
+`simulator/scripts/seed-demo.mjs` signs in as the owner and creates missing deterministic rooms/devices.
+It reuses an existing level 0/1 floor when large enough and skips existing fixed IDs. Copy the variable
+names from `firebase/seed.example`, export values for the current shell, then run:
+
+```bash
+npm --prefix simulator run seed:demo
+```
+
+Do not save or commit the owner password. Shell history can also retain inline values, so use a silent
+prompt where available rather than typing the password into the command itself.
+
 ## Firestore rule checks
 
 ```bash

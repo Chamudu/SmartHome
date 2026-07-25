@@ -190,6 +190,52 @@ class OutletViewModelTest {
         }
     }
 
+    @Test
+    fun `moving device validates destination and infers room`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val outletRepository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val floorRepository = FakeFloorRepository()
+            val viewModel = OutletViewModel(outletRepository, floorRepository)
+            floorRepository.emitFloors(listOf(floor()))
+            advanceUntilIdle()
+            floorRepository.emitRooms(listOf(RoomLayout("kitchen", "Kitchen", 0, 0, 4, 4)))
+            advanceUntilIdle()
+
+            viewModel.moveDevice("other-device", 2, 2)
+            advanceUntilIdle()
+
+            assertEquals(DevicePlacement("ground-floor", "kitchen", 2, 2), outletRepository.placement)
+            assertEquals("Device moved.", viewModel.uiState.value.layoutMessage)
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `primary synchronized outlet cannot be deleted`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+
+            viewModel.deleteDevice("main-outlet")
+            advanceUntilIdle()
+
+            assertNull(repository.deletedDeviceId)
+            assertEquals(
+                "The primary synchronized outlet cannot be deleted yet.",
+                viewModel.uiState.value.layoutMessage,
+            )
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     private fun floor() = FloorPlan(
         id = "ground-floor",
         name = "Ground floor",
@@ -296,6 +342,9 @@ private class FakeOutletRepository(
     var createdDevice: NewDevice? = null
         private set
 
+    var deletedDeviceId: String? = null
+        private set
+
     override suspend fun signIn(
         email: String,
         password: String,
@@ -337,6 +386,21 @@ private class FakeOutletRepository(
         row: Int,
     ) {
         placement = DevicePlacement(floorId, roomId, column, row)
+    }
+
+    override suspend fun placeDevice(
+        homeId: String,
+        deviceId: String,
+        floorId: String,
+        roomId: String?,
+        column: Int,
+        row: Int,
+    ) {
+        placement = DevicePlacement(floorId, roomId, column, row)
+    }
+
+    override suspend fun deleteDevice(homeId: String, deviceId: String) {
+        deletedDeviceId = deviceId
     }
 
     suspend fun emit(outlet: OutletDevice) {

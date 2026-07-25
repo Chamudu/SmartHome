@@ -1,18 +1,17 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 import { isFirebaseConfigured } from './firebase'
-import { useOutletSimulator } from './useOutletSimulator'
-import type { DeviceStatus } from './types'
+import { useDeviceSimulator } from './useDeviceSimulator'
+import type { DeviceConfig, DeviceProfile, DeviceStatus, DeviceTwin } from './types'
 
 const statusOptions: DeviceStatus[] = ['ON', 'OFF', 'ERROR', 'DISCONNECTED']
+const profileOptions: Array<DeviceProfile | 'ALL'> = [
+  'ALL', 'OUTLET', 'MULTI_SWITCH', 'SAFETY_OUTLET', 'LIGHT', 'CAMERA',
+]
 
 function App() {
-  if (!isFirebaseConfigured) {
-    return <ConfigurationRequired />
-  }
-
-  return <SimulatorConsole />
+  return isFirebaseConfigured ? <SimulatorConsole /> : <ConfigurationRequired />
 }
 
 function ConfigurationRequired() {
@@ -23,10 +22,7 @@ function ConfigurationRequired() {
         <h1>Firebase configuration required</h1>
         <p>
           Copy <code>.env.example</code> to <code>.env.local</code>, then provide
-          the Firebase web application and seeded outlet identifiers.
-        </p>
-        <p className="muted">
-          Local environment files are excluded from source control.
+          the Firebase web application values and home identifier.
         </p>
       </section>
     </main>
@@ -34,9 +30,20 @@ function ConfigurationRequired() {
 }
 
 function SimulatorConsole() {
-  const simulator = useOutletSimulator()
+  const simulator = useDeviceSimulator()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [floorFilter, setFloorFilter] = useState('ALL')
+  const [profileFilter, setProfileFilter] = useState<DeviceProfile | 'ALL'>('ALL')
+
+  const floors = useMemo(
+    () => [...new Set(simulator.devices.map((device) => device.floorId))].sort(),
+    [simulator.devices],
+  )
+  const visibleDevices = simulator.devices.filter((device) =>
+    (floorFilter === 'ALL' || device.floorId === floorFilter) &&
+    (profileFilter === 'ALL' || device.profile === profileFilter),
+  )
 
   function submitSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -49,29 +56,13 @@ function SimulatorConsole() {
         <form className="setup-card sign-in" onSubmit={submitSignIn}>
           <p className="eyebrow">Hardware simulator</p>
           <h1>Simulator access</h1>
-          <label>
-            Email
-            <input
-              type="email"
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
+          <label>Email<input type="email" autoComplete="username" required value={email}
+            onChange={(event) => setEmail(event.target.value)} /></label>
+          <label>Password<input type="password" autoComplete="current-password" required value={password}
+            onChange={(event) => setPassword(event.target.value)} /></label>
           {simulator.error && <p className="error-message">{simulator.error}</p>}
-          <button className="primary-button" type="submit" disabled={simulator.busy}>
-            {simulator.busy ? 'Connecting…' : 'Sign in'}
+          <button className="primary-button" type="submit" disabled={simulator.authBusy}>
+            {simulator.authBusy ? 'Connecting…' : 'Sign in'}
           </button>
         </form>
       </main>
@@ -81,50 +72,51 @@ function SimulatorConsole() {
   return (
     <main className="shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">Smart Home</p>
-          <h1>Hardware simulator</h1>
-        </div>
+        <div><p className="eyebrow">Smart Home</p><h1>Hardware simulator</h1></div>
         <div className="session">
           <span className={`connection-dot ${simulator.listenerConnected ? 'is-online' : ''}`} />
-          <span>{simulator.listenerConnected ? 'Cloud listener active' : 'Connecting…'}</span>
-          <button className="text-button" type="button" onClick={() => void simulator.signOut()}>
-            Sign out
-          </button>
+          <span>{simulator.listenerConnected ? `${simulator.devices.length} devices connected` : 'Connecting…'}</span>
+          <button className="text-button" type="button" onClick={() => void simulator.signOut()}>Sign out</button>
         </div>
       </header>
 
       <section className="workspace">
         <aside className="sidebar">
-          <p className="sidebar-label">Environment</p>
-          <strong>Primary home</strong>
-          <span>Ground floor</span>
+          <p className="sidebar-label">Floor</p>
+          {['ALL', ...floors].map((floor) => (
+            <button key={floor} className={floorFilter === floor ? 'filter-button is-selected' : 'filter-button'}
+              type="button" onClick={() => setFloorFilter(floor)}>
+              {floor === 'ALL' ? 'All floors' : floor}
+            </button>
+          ))}
           <div className="sidebar-rule" />
-          <p className="sidebar-label">Connected identity</p>
+          <p className="sidebar-label">Profile</p>
+          <select value={profileFilter} onChange={(event) => setProfileFilter(event.target.value as DeviceProfile | 'ALL')}>
+            {profileOptions.map((profile) => <option key={profile} value={profile}>{formatProfile(profile)}</option>)}
+          </select>
+          <div className="sidebar-rule" />
+          <p className="sidebar-label">Identity</p>
           <strong>{simulator.user.email ?? 'Simulator account'}</strong>
-          <span>Hardware simulator</span>
+          <span>SIMULATOR role</span>
         </aside>
 
         <section className="content">
           <div className="section-heading">
-            <div>
-              <p className="eyebrow">Ground floor / Utility</p>
-              <h2>Outlet diagnostic</h2>
-            </div>
-            <span className={`status-pill status-${simulator.device?.reported.status.toLowerCase() ?? 'loading'}`}>
-              {simulator.device?.reported.status ?? 'LOADING'}
-            </span>
+            <div><p className="eyebrow">Realtime hardware state</p><h2>Device diagnostics</h2></div>
+            <span className="status-pill">{visibleDevices.length} shown</span>
           </div>
-
           {simulator.error && <p className="error-banner">{simulator.error}</p>}
-
-          {!simulator.device ? (
-            <section className="device-card empty-state">
-              <h3>Waiting for seeded outlet</h3>
-              <p>The listener is active, but the configured device document is not available yet.</p>
-            </section>
+          {visibleDevices.length === 0 ? (
+            <section className="device-card empty-state"><h3>No matching devices</h3>
+              <p>Create devices in Android or change the simulator filters.</p></section>
           ) : (
-            <OutletCard simulator={simulator} />
+            <div className="device-list">
+              {visibleDevices.map((device) => (
+                <DeviceCard key={device.id} device={device}
+                  busy={simulator.busyDeviceIds.has(device.id)}
+                  onReport={(status) => void simulator.reportStatus(device.id, status)} />
+              ))}
+            </div>
           )}
         </section>
       </section>
@@ -132,76 +124,56 @@ function SimulatorConsole() {
   )
 }
 
-type OutletCardProps = {
-  simulator: ReturnType<typeof useOutletSimulator>
-}
-
-function OutletCard({ simulator }: OutletCardProps) {
-  const device = simulator.device
-  if (!device) return null
-
-  const hasPendingRequest =
-    device.desired.requestId !== null &&
-    device.desired.requestId !== device.reported.requestId
-
+function DeviceCard({ device, busy, onReport }: {
+  device: DeviceTwin
+  busy: boolean
+  onReport: (status: DeviceStatus) => void
+}) {
+  const pending = device.desired.requestId !== null && device.desired.requestId !== device.reported.requestId
   return (
-    <section className="device-card">
+    <article className="device-card">
       <div className="device-identity">
-        <div className="outlet-glyph" aria-hidden="true">
-          <span />
-          <span />
-        </div>
-        <div>
-          <h3>{device.name}</h3>
-          <p>{device.profile.replace('_', ' ')}</p>
-        </div>
+        <div className="profile-glyph" aria-hidden="true">{profileGlyph(device.profile)}</div>
+        <div><h3>{device.name}</h3><p>{formatProfile(device.profile)}</p></div>
+        <span className={`status-pill status-${device.reported.status.toLowerCase()}`}>{device.reported.status}</span>
       </div>
-
       <dl className="telemetry-grid">
-        <div>
-          <dt>Desired</dt>
-          <dd>{device.desired.status}</dd>
-        </div>
-        <div>
-          <dt>Reported</dt>
-          <dd>{device.reported.status}</dd>
-        </div>
-        <div>
-          <dt>Command</dt>
-          <dd>{hasPendingRequest ? 'PENDING' : device.commandState}</dd>
-        </div>
-        <div>
-          <dt>Request ID</dt>
-          <dd className="request-id">{device.desired.requestId ?? '—'}</dd>
-        </div>
+        <div><dt>Desired</dt><dd>{device.desired.status}</dd></div>
+        <div><dt>Reported</dt><dd>{device.reported.status}</dd></div>
+        <div><dt>Command</dt><dd>{pending ? 'PENDING' : device.commandState}</dd></div>
+        <div><dt>Position</dt><dd>{device.position.column}, {device.position.row}</dd></div>
       </dl>
-
+      <p className="config-summary">{configurationSummary(device.profile, device.config)}</p>
       <div className="control-panel">
-        <div>
-          <p className="control-title">Report physical state</p>
-          <p className="muted">Simulates a state observation sent by hardware.</p>
-        </div>
+        <div><p className="control-title">Report physical state</p>
+          <p className="muted">Writes only simulator-authorized reported fields.</p></div>
         <div className="button-row">
           {statusOptions.map((status) => (
-            <button
-              key={status}
-              className={device.reported.status === status ? 'state-button is-selected' : 'state-button'}
-              type="button"
-              disabled={simulator.busy}
-              onClick={() => void simulator.reportStatus(status)}
-            >
-              {status}
-            </button>
+            <button key={status} className={device.reported.status === status ? 'state-button is-selected' : 'state-button'}
+              type="button" disabled={busy} onClick={() => onReport(status)}>{status}</button>
           ))}
         </div>
       </div>
-
-      <footer className="device-footer">
-        <span>Automatic command acknowledgement: enabled</span>
-        <span>{simulator.busy ? 'Writing state…' : 'Ready'}</span>
-      </footer>
-    </section>
+      <footer className="device-footer"><span>{device.floorId} / {device.roomId ?? 'Unassigned room'}</span>
+        <span>{busy ? 'Writing state…' : 'Ready'}</span></footer>
+    </article>
   )
+}
+
+function formatProfile(profile: DeviceProfile | 'ALL') {
+  return profile === 'ALL' ? 'All profiles' : profile.replaceAll('_', ' ')
+}
+
+function profileGlyph(profile: DeviceProfile) {
+  return ({ OUTLET: '◉', MULTI_SWITCH: '≡', SAFETY_OUTLET: '⚠', LIGHT: '✦', CAMERA: '▣' })[profile]
+}
+
+function configurationSummary(profile: DeviceProfile, config: DeviceConfig) {
+  if (profile === 'MULTI_SWITCH' && 'channels' in config) return `${config.channels.length} independent channels`
+  if (profile === 'SAFETY_OUTLET' && 'maxOnDurationSeconds' in config) return `Maximum active time: ${config.maxOnDurationSeconds / 60} minutes`
+  if (profile === 'LIGHT' && 'schedule' in config) return `Schedule ${config.schedule.enabled ? 'enabled' : 'disabled'} · ${config.schedule.timezone}`
+  if (profile === 'CAMERA' && 'mediaUri' in config) return `${config.mediaType} · ${config.mediaUri}`
+  return 'Continuous single-channel power'
 }
 
 export default App

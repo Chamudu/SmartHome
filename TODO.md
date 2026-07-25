@@ -44,10 +44,10 @@ completed items should remain checked for release traceability.
 
 ## P1 — Simulator and integration
 
-- [ ] Display all seeded devices in the hardware simulator.
+- [x] Display all seeded devices in the hardware simulator.
 - [x] Reflect cloud commands without refresh.
-- [ ] Simulate state changes, errors, disconnects, and reconnects.
-- [ ] Create deterministic seed data with two floors and every device profile.
+- [x] Simulate state changes, errors, disconnects, and reconnects.
+- [x] Create a deterministic, idempotent seed tool with two floors and every device profile.
 - [ ] Add end-to-end tests for Android/backend/simulator data contracts where practical.
 
 ## P1 — Release readiness

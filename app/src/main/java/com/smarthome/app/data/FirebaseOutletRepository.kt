@@ -178,6 +178,17 @@ class FirebaseOutletRepository(
         column: Int,
         row: Int,
     ) {
+        placeDevice(homeId, deviceId, floorId, roomId, column, row)
+    }
+
+    override suspend fun placeDevice(
+        homeId: String,
+        deviceId: String,
+        floorId: String,
+        roomId: String?,
+        column: Int,
+        row: Int,
+    ) {
         outletDocument(homeId, deviceId)
             .update(
                 mapOf(
@@ -189,6 +200,10 @@ class FirebaseOutletRepository(
                 ),
             )
             .await()
+    }
+
+    override suspend fun deleteDevice(homeId: String, deviceId: String) {
+        outletDocument(homeId, deviceId).delete().await()
     }
 
     private fun outletDocument(

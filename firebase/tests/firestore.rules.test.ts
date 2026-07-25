@@ -428,6 +428,40 @@ describe('device creation validation', () => {
     )
   })
 
+  it('allows complete outlet, safety, light, and camera profiles', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    await assertSucceeds(setDoc(
+      doc(database, 'homes', HOME_ID, 'devices', 'new-outlet'),
+      newDevice('OUTLET', {}),
+    ))
+    await assertSucceeds(setDoc(
+      doc(database, 'homes', HOME_ID, 'devices', 'new-safety'),
+      newDevice('SAFETY_OUTLET', {
+        maxOnDurationSeconds: 900, activatedAt: null, cutoffDueAt: null,
+      }),
+    ))
+    await assertSucceeds(setDoc(
+      doc(database, 'homes', HOME_ID, 'devices', 'new-light'),
+      newDevice('LIGHT', {
+        schedule: {
+          enabled: false,
+          startLocalTime: '18:00',
+          endLocalTime: '22:00',
+          timezone: 'Asia/Colombo',
+          lastEvaluatedAt: null,
+        },
+      }),
+    ))
+    await assertSucceeds(setDoc(
+      doc(database, 'homes', HOME_ID, 'devices', 'new-camera'),
+      newDevice('CAMERA', {
+        mediaType: 'SNAPSHOT',
+        mediaUri: 'https://placehold.co/640x360',
+        capturedAt: new Date(),
+      }),
+    ))
+  })
+
   it('denies an unsupported switch channel count', async () => {
     const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
     await assertFails(

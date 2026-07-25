@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -56,6 +57,8 @@ fun FloorDashboardSection(
     onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
     onOutletPlaced: (Int, Int) -> Unit,
     onDeviceCreated: (String, DeviceProfile, Int, Int, Int, Int, String) -> Unit,
+    onDeviceMoved: (String, Int, Int) -> Unit,
+    onDeviceDeleted: (String) -> Unit,
 ) {
     var showFloorDialog by remember { mutableStateOf(false) }
     var showRoomDialog by remember { mutableStateOf(false) }
@@ -66,6 +69,9 @@ fun FloorDashboardSection(
     var showPlacementDialog by remember { mutableStateOf(false) }
     var deviceCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var roomDraft by remember { mutableStateOf<RoomLayout?>(null) }
+    var selectedDevice by remember { mutableStateOf<SmartDevice?>(null) }
+    var movingDevice by remember { mutableStateOf<SmartDevice?>(null) }
+    var devicePendingDeletion by remember { mutableStateOf<SmartDevice?>(null) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -119,6 +125,7 @@ fun FloorDashboardSection(
                     onEmptyAreaDragged = { column, row, width, height ->
                         roomDraft = RoomLayout("", "", column, row, width, height)
                     },
+                    onDeviceTapped = { device -> selectedDevice = device },
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -278,6 +285,46 @@ fun FloorDashboardSection(
         )
     }
 
+    selectedDevice?.let { device ->
+        DeviceDetailDialog(
+            device = device,
+            onDismiss = { selectedDevice = null },
+            onMove = {
+                selectedDevice = null
+                movingDevice = device
+            },
+            onDelete = {
+                selectedDevice = null
+                devicePendingDeletion = device
+            },
+        )
+    }
+
+    movingDevice?.let { device ->
+        PlacementDialog(
+            title = "Move ${device.name}",
+            initialColumn = device.column,
+            initialRow = device.row,
+            onDismiss = { movingDevice = null },
+            onSubmit = { column, row ->
+                onDeviceMoved(device.id, column, row)
+                movingDevice = null
+            },
+        )
+    }
+
+    devicePendingDeletion?.let { device ->
+        ConfirmationDialog(
+            title = "Delete ${device.name}?",
+            message = "This removes the device. Existing event history is not deleted.",
+            onDismiss = { devicePendingDeletion = null },
+            onConfirm = {
+                onDeviceDeleted(device.id)
+                devicePendingDeletion = null
+            },
+        )
+    }
+
     if (confirmFloorDeletion) {
         ConfirmationDialog(
             title = "Delete floor?",
@@ -325,6 +372,7 @@ private fun FloorGrid(
     devices: List<SmartDevice>,
     onEmptyCellLongPressed: (Int, Int) -> Unit,
     onEmptyAreaDragged: (Int, Int, Int, Int) -> Unit,
+    onDeviceTapped: (SmartDevice) -> Unit,
 ) {
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val roomBackground = MaterialTheme.colorScheme.secondaryContainer
@@ -472,6 +520,7 @@ private fun FloorGrid(
                     .size(cellWidth, cellHeight)
                     .background(MaterialTheme.colorScheme.errorContainer)
                     .border(2.dp, MaterialTheme.colorScheme.error)
+                    .clickable { onDeviceTapped(device) }
                     .padding(2.dp),
             ) {
                 Text(
@@ -483,6 +532,34 @@ private fun FloorGrid(
             }
         }
     }
+}
+
+@Composable
+private fun DeviceDetailDialog(
+    device: SmartDevice,
+    onDismiss: () -> Unit,
+    onMove: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(device.name) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(device.profile.displayName)
+                Text("Status: ${device.reportedStatus.name}")
+                Text("Position: ${device.column}, ${device.row}")
+                Text("Tap Move to enter another valid grid coordinate.")
+            }
+        },
+        confirmButton = { TextButton(onClick = onMove) { Text("Move") } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onDelete) { Text("Delete") }
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
+        },
+    )
 }
 
 @Composable
@@ -716,16 +793,19 @@ private fun RoomDialog(
 
 @Composable
 private fun PlacementDialog(
+    title: String = "Place outlet",
+    initialColumn: Int = 0,
+    initialRow: Int = 0,
     onDismiss: () -> Unit,
     onSubmit: (Int, Int) -> Unit,
 ) {
-    var column by remember { mutableStateOf("0") }
-    var row by remember { mutableStateOf("0") }
+    var column by remember { mutableStateOf(initialColumn.toString()) }
+    var row by remember { mutableStateOf(initialRow.toString()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Place outlet") },
+        title = { Text(title) },
         text = {
             LayoutForm(
                 fields = listOf(

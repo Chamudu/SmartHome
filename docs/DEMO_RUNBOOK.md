@@ -13,7 +13,8 @@ product behavior.
 4. Connect the Android phone and install with `./gradlew :app:installDebug`.
 5. Start the simulator with `npm --prefix simulator run dev` and sign in as the simulator identity.
 6. Sign in on Android as the owner identity.
-7. Confirm the seeded home/outlet exists and both clients have network access.
+7. Run the authenticated seed tool when deterministic demo data is missing.
+8. Confirm both clients have network access and the simulator lists all five profiles.
 
 Never expose passwords, environment files, Authentication user IDs, or Firebase configuration files in
 screenshots or recordings.
@@ -27,9 +28,10 @@ screenshots or recordings.
 5. Create adjacent rooms; show overlap and out-of-bounds rejection.
 6. Rename/edit rooms and show protected deletion while a device is assigned.
 7. Drag on empty grid space to prefill a room rectangle.
-8. Long-press a cell to prefill Add Device; create several profiles and show reactive dashboard markers.
+8. Long-press a cell to prefill Add Device; create a profile and show it appear reactively in both clients.
 9. Attempt an invalid four-channel switch or unsafe camera URI to show validation.
-10. Briefly show emulator-backed rule tests as evidence that direct APIs cannot bypass authorization.
+10. Filter devices and report error/disconnection independently from the simulator.
+11. Briefly show emulator-backed rule tests as evidence that direct APIs cannot bypass authorization.
 
 ## Planned final walkthrough additions
 

@@ -28,6 +28,8 @@ npm --prefix simulator run build
 - Valid commands reach the repository; error-state commands do not.
 - Outlet placement infers the containing room.
 - Safety duration converts minutes at the UI boundary into persisted seconds.
+- Device movement infers its destination room and the synchronized primary outlet is protected from
+  deletion during migration.
 - Floor names/dimensions/unique levels and room boundaries/overlap/shared edges.
 - Active membership and outsider/unauthenticated denial.
 - Owner desired writes versus simulator reported writes.
@@ -35,6 +37,7 @@ npm --prefix simulator run build
 - Device placement within its floor and optional room.
 - Valid multi-switch creation, invalid channel counts, unsafe camera URI denial, and simulator creation
   denial.
+- Complete valid outlet, safety outlet, light, and camera seed shapes.
 
 ## Manual acceptance focus
 

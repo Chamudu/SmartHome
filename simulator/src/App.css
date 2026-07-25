@@ -145,6 +145,32 @@ button:focus-visible {
   font-size: 0.8rem;
 }
 
+.filter-button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #aeb9c8;
+  background: transparent;
+  text-align: left;
+}
+
+.filter-button:hover,
+.filter-button.is-selected {
+  border-color: #315d5a;
+  color: #99f6e4;
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.sidebar select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #334155;
+  border-radius: 9px;
+  color: #dce5ef;
+  background: #0b121c;
+}
+
 .sidebar-rule {
   height: 1px;
   margin: 24px 0;
@@ -202,6 +228,11 @@ button:focus-visible {
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
 }
 
+.device-list {
+  display: grid;
+  gap: 20px;
+}
+
 .empty-state {
   padding: 44px;
 }
@@ -229,6 +260,30 @@ button:focus-visible {
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;
+}
+
+.device-identity .status-pill {
+  margin-left: auto;
+}
+
+.profile-glyph {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid #3b4b60;
+  border-radius: 14px;
+  color: #5eead4;
+  background: #0b121c;
+  font-size: 1.5rem;
+}
+
+.config-summary {
+  margin: 0;
+  padding: 18px 28px;
+  border-bottom: 1px solid #263345;
+  color: #aeb9c8;
+  font-size: 0.82rem;
 }
 
 .outlet-glyph {

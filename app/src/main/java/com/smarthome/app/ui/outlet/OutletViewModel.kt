@@ -504,6 +504,45 @@ class OutletViewModel(
         }
     }
 
+    fun moveDevice(deviceId: String, column: Int, row: Int) {
+        val floor = mutableUiState.value.selectedFloor ?: return
+        val message = when {
+            FloorLayoutValidator.validateDevicePosition(floor, column, row).isNotEmpty() ->
+                "The device position is outside the floor grid."
+            mutableUiState.value.devices.any { device ->
+                device.id != deviceId && device.floorId == floor.id &&
+                    device.column == column && device.row == row
+            } -> "That grid cell already contains a device."
+            else -> null
+        }
+        if (message != null) {
+            mutableUiState.update { it.copy(layoutMessage = message) }
+            return
+        }
+        val roomId = floor.rooms.firstOrNull { room ->
+            column in room.column until room.right && row in room.row until room.bottom
+        }?.id
+        saveLayout(
+            action = { repository.placeDevice(HOME_ID, deviceId, floor.id, roomId, column, row) },
+            successMessage = "Device moved.",
+            failureMessage = "The device could not be moved.",
+        )
+    }
+
+    fun deleteDevice(deviceId: String) {
+        if (deviceId == OUTLET_ID) {
+            mutableUiState.update {
+                it.copy(layoutMessage = "The primary synchronized outlet cannot be deleted yet.")
+            }
+            return
+        }
+        saveLayout(
+            action = { repository.deleteDevice(HOME_ID, deviceId) },
+            successMessage = "Device deleted.",
+            failureMessage = "The device could not be deleted.",
+        )
+    }
+
     fun deleteSelectedFloor() {
         val floorId = mutableUiState.value.selectedFloorId ?: return
         if (mutableUiState.value.isSavingLayout) return

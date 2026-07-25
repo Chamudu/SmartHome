@@ -17,15 +17,19 @@ Status date: 2026-07-25
 - Shared polymorphic device collection and secure creation for outlet, multi-switch, safety outlet, light,
   and camera profiles.
 - Touch-first room drag preview and long-press Add Device coordinate prefill.
+- Tap device marker details, move with placement revalidation, and confirmed deletion.
 - Branded Material 3 light/dark schemes and status text plus semantic container colors.
+- Multi-device simulator collection listener, floor/profile filters, automatic command acknowledgement,
+  and independent status/error/disconnection reports.
+- Authenticated deterministic seed tool for two floors, four rooms, and all five profiles.
 
 ## Current verification evidence
 
 | Layer | Evidence |
 | --- | --- |
-| Android domain/ViewModel | 16 passing JUnit tests |
+| Android domain/ViewModel | 18 passing JUnit tests |
 | Android packaging | `:app:assembleDebug` succeeds |
-| Firestore authorization/schema | 20 passing emulator-backed Vitest tests |
+| Firestore authorization/schema | 21 passing emulator-backed Vitest tests |
 | Simulator | TypeScript typecheck, Oxlint, and Vite production build succeed |
 | Cloud rules | Tested rules deployed successfully to the development Firebase project |
 | Physical integration | Outlet synchronization and earlier floor lifecycle accepted on a phone |
@@ -41,12 +45,12 @@ not an APK compilation failure.
 
 ## Not implemented yet
 
-- Tap selection and touch resize/move for existing rooms and device markers.
+- Touch resize/move for existing rooms; device movement currently uses a coordinate form after tapping.
 - Per-channel multi-switch commands.
 - Safety configuration editing, trusted Cloud Function cutoff, events, and alerts.
 - Scheduled light execution.
 - Camera snapshot rendering/upload and optional second-phone camera node.
-- Generalized multi-device simulator and deterministic two-floor seed script.
+- Executing the seed against a target environment still requires owner credentials exported locally.
 - Activity reporting, offline demonstration, CI, and signed release packaging.
 
 ## Active branch

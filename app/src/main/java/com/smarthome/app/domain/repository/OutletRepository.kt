@@ -42,4 +42,15 @@ interface OutletRepository {
         column: Int,
         row: Int,
     )
+
+    suspend fun placeDevice(
+        homeId: String,
+        deviceId: String,
+        floorId: String,
+        roomId: String?,
+        column: Int,
+        row: Int,
+    )
+
+    suspend fun deleteDevice(homeId: String, deviceId: String)
 }

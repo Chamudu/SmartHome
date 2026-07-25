@@ -12,10 +12,9 @@ const firebaseConfig = {
 }
 
 export const homeId = import.meta.env.VITE_FIREBASE_HOME_ID as string | undefined
-export const outletId = import.meta.env.VITE_FIREBASE_OUTLET_ID as string | undefined
 
 export const isFirebaseConfigured =
-  Object.values(firebaseConfig).every(Boolean) && Boolean(homeId) && Boolean(outletId)
+  Object.values(firebaseConfig).every(Boolean) && Boolean(homeId)
 
 const app = isFirebaseConfigured
   ? getApps().length > 0

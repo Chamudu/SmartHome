@@ -63,6 +63,8 @@ fun OutletRoute(
         onRoomUpdated = viewModel::updateRoom,
         onOutletPlaced = viewModel::placeOutlet,
         onDeviceCreated = viewModel::createDevice,
+        onDeviceMoved = viewModel::moveDevice,
+        onDeviceDeleted = viewModel::deleteDevice,
     )
 }
 
@@ -83,6 +85,8 @@ private fun OutletScreen(
     onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
     onOutletPlaced: (Int, Int) -> Unit,
     onDeviceCreated: (String, DeviceProfile, Int, Int, Int, Int, String) -> Unit,
+    onDeviceMoved: (String, Int, Int) -> Unit,
+    onDeviceDeleted: (String) -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -101,6 +105,8 @@ private fun OutletScreen(
                 onRoomUpdated = onRoomUpdated,
                 onOutletPlaced = onOutletPlaced,
                 onDeviceCreated = onDeviceCreated,
+                onDeviceMoved = onDeviceMoved,
+                onDeviceDeleted = onDeviceDeleted,
             )
         } else {
             SignInScreen(
@@ -221,6 +227,8 @@ private fun OutletDashboard(
     onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
     onOutletPlaced: (Int, Int) -> Unit,
     onDeviceCreated: (String, DeviceProfile, Int, Int, Int, Int, String) -> Unit,
+    onDeviceMoved: (String, Int, Int) -> Unit,
+    onDeviceDeleted: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -262,6 +270,8 @@ private fun OutletDashboard(
             onRoomUpdated = onRoomUpdated,
             onOutletPlaced = onOutletPlaced,
             onDeviceCreated = onDeviceCreated,
+            onDeviceMoved = onDeviceMoved,
+            onDeviceDeleted = onDeviceDeleted,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
