@@ -2,10 +2,13 @@ package com.smarthome.app.ui.outlet
 
 import com.smarthome.app.domain.model.CommandState
 import com.smarthome.app.domain.model.DeviceStatus
+import com.smarthome.app.domain.model.DeviceProfile
 import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.OutletDevice
+import com.smarthome.app.domain.model.NewDevice
 import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.RoomLayout
+import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.OutletRepository
 import kotlinx.coroutines.Dispatchers
@@ -152,6 +155,41 @@ class OutletViewModelTest {
         }
     }
 
+    @Test
+    fun `creating safety outlet converts minutes and infers room`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val outletRepository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val floorRepository = FakeFloorRepository()
+            val viewModel = OutletViewModel(outletRepository, floorRepository)
+            floorRepository.emitFloors(listOf(floor()))
+            advanceUntilIdle()
+            floorRepository.emitRooms(
+                listOf(RoomLayout("utility", "Utility", 0, 0, 4, 4)),
+            )
+            advanceUntilIdle()
+
+            viewModel.createDevice(
+                name = "Iron",
+                profile = DeviceProfile.SAFETY_OUTLET,
+                column = 1,
+                row = 2,
+                channelCount = 2,
+                maxOnDurationMinutes = 15,
+                mediaUri = "",
+            )
+            advanceUntilIdle()
+
+            assertEquals("utility", outletRepository.createdDevice?.roomId)
+            assertEquals(900, outletRepository.createdDevice?.maxOnDurationSeconds)
+            assertEquals("Device created.", viewModel.uiState.value.layoutMessage)
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     private fun floor() = FloorPlan(
         id = "ground-floor",
         name = "Ground floor",
@@ -244,6 +282,7 @@ private class FakeOutletRepository(
     override var hasAuthenticatedUser: Boolean = false,
 ) : OutletRepository {
     private val outlets = MutableSharedFlow<OutletDevice>(replay = 1)
+    private val devices = MutableSharedFlow<List<SmartDevice>>(replay = 1)
 
     var signedInEmail: String? = null
         private set
@@ -252,6 +291,9 @@ private class FakeOutletRepository(
         private set
 
     var placement: DevicePlacement? = null
+        private set
+
+    var createdDevice: NewDevice? = null
         private set
 
     override suspend fun signIn(
@@ -270,6 +312,13 @@ private class FakeOutletRepository(
         homeId: String,
         deviceId: String,
     ): Flow<OutletDevice> = outlets
+
+    override fun observeDevices(homeId: String): Flow<List<SmartDevice>> = devices
+
+    override suspend fun createDevice(homeId: String, device: NewDevice): String {
+        createdDevice = device
+        return "created-device"
+    }
 
     override suspend fun requestPowerState(
         homeId: String,

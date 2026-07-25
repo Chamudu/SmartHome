@@ -242,6 +242,8 @@ and disconnected states.
 - Scrolling outside the editor must not accidentally create a room; the editor claims input only after
   the drag gesture is recognized.
 - Haptic feedback may confirm long-press recognition but is never the only feedback.
+- Profile creation uses progressive disclosure: common name/placement fields remain visible, while only
+  the selected profile's channels, safety duration, or mock media fields are shown.
 
 ## Accessibility baseline
 

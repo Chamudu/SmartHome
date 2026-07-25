@@ -385,3 +385,80 @@ describe('device placement validation', () => {
     )
   })
 })
+
+describe('device creation validation', () => {
+  function channels(count: number) {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `channel-${index + 1}`,
+      name: `Switch ${index + 1}`,
+      desiredStatus: 'OFF',
+      reportedStatus: 'OFF',
+      requestId: null,
+    }))
+  }
+
+  function newDevice(profile: string, config: Record<string, unknown>) {
+    const now = new Date()
+    return {
+      name: 'New device',
+      profile,
+      floorId: 'ground-floor',
+      roomId: 'utility',
+      position: { column: 2, row: 2 },
+      desired: {
+        status: 'OFF', requestId: null, requestedBy: null, requestedAt: null,
+      },
+      reported: {
+        status: 'OFF', requestId: null, updatedAt: now, errorCode: null,
+      },
+      commandState: 'IDLE',
+      config,
+      createdAt: now,
+      updatedAt: now,
+    }
+  }
+
+  it('allows an owner to create a valid five-channel switch', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    await assertSucceeds(
+      setDoc(
+        doc(database, 'homes', HOME_ID, 'devices', 'hall-switch'),
+        newDevice('MULTI_SWITCH', { channels: channels(5) }),
+      ),
+    )
+  })
+
+  it('denies an unsupported switch channel count', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    await assertFails(
+      setDoc(
+        doc(database, 'homes', HOME_ID, 'devices', 'bad-switch'),
+        newDevice('MULTI_SWITCH', { channels: channels(4) }),
+      ),
+    )
+  })
+
+  it('denies a camera with a non-HTTPS media URI', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    await assertFails(
+      setDoc(
+        doc(database, 'homes', HOME_ID, 'devices', 'bad-camera'),
+        newDevice('CAMERA', {
+          mediaType: 'SNAPSHOT',
+          mediaUri: 'javascript:alert(1)',
+          capturedAt: new Date(),
+        }),
+      ),
+    )
+  })
+
+  it('denies simulator-created devices', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+    await assertFails(
+      setDoc(
+        doc(database, 'homes', HOME_ID, 'devices', 'forged-device'),
+        newDevice('OUTLET', {}),
+      ),
+    )
+  })
+})

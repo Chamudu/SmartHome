@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -34,8 +35,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.smarthome.app.domain.model.DeviceStatus
+import com.smarthome.app.domain.model.DeviceProfile
+import com.smarthome.app.domain.model.DeviceConfiguration
 import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
+import com.smarthome.app.domain.model.SmartDevice
 
 @Composable
 fun OutletRoute(
@@ -58,6 +62,7 @@ fun OutletRoute(
         onFloorUpdated = viewModel::updateSelectedFloor,
         onRoomUpdated = viewModel::updateRoom,
         onOutletPlaced = viewModel::placeOutlet,
+        onDeviceCreated = viewModel::createDevice,
     )
 }
 
@@ -77,6 +82,7 @@ private fun OutletScreen(
     onFloorUpdated: (String, Int, Int, Int) -> Unit,
     onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
     onOutletPlaced: (Int, Int) -> Unit,
+    onDeviceCreated: (String, DeviceProfile, Int, Int, Int, Int, String) -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -94,6 +100,7 @@ private fun OutletScreen(
                 onFloorUpdated = onFloorUpdated,
                 onRoomUpdated = onRoomUpdated,
                 onOutletPlaced = onOutletPlaced,
+                onDeviceCreated = onDeviceCreated,
             )
         } else {
             SignInScreen(
@@ -213,6 +220,7 @@ private fun OutletDashboard(
     onFloorUpdated: (String, Int, Int, Int) -> Unit,
     onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
     onOutletPlaced: (Int, Int) -> Unit,
+    onDeviceCreated: (String, DeviceProfile, Int, Int, Int, Int, String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -253,35 +261,42 @@ private fun OutletDashboard(
             onFloorUpdated = onFloorUpdated,
             onRoomUpdated = onRoomUpdated,
             onOutletPlaced = onOutletPlaced,
+            onDeviceCreated = onDeviceCreated,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Devices",
+            text = "Device dashboard",
             style = MaterialTheme.typography.titleLarge,
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
         when {
-            state.isLoadingOutlet -> {
+            state.isLoadingDevices -> {
                 CircularProgressIndicator()
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Loading outlet…")
+                Text("Loading devices…")
             }
 
-            state.outlet != null -> {
-                OutletCard(
-                    outlet = state.outlet,
-                    isSendingCommand = state.isSendingCommand,
-                    onPowerStateRequested = onPowerStateRequested,
-                )
-            }
+            state.devices.isEmpty() -> Text("No devices are configured on this home.")
 
-            else -> {
-                Text("No outlet is available.")
+            else -> state.devices.forEach { device ->
+                DeviceSummaryCard(device)
+                Spacer(modifier = Modifier.height(12.dp))
             }
+        }
+
+        state.outlet?.let { outlet ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Main outlet control", style = MaterialTheme.typography.titleLarge)
+            Spacer(modifier = Modifier.height(12.dp))
+            OutletCard(
+                outlet = outlet,
+                isSendingCommand = state.isSendingCommand,
+                onPowerStateRequested = onPowerStateRequested,
+            )
         }
 
         state.errorMessage?.let { message ->
@@ -292,6 +307,46 @@ private fun OutletDashboard(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+    }
+}
+
+@Composable
+private fun DeviceSummaryCard(device: SmartDevice) {
+    val containerColor = when (device.reportedStatus) {
+        DeviceStatus.ON -> MaterialTheme.colorScheme.primaryContainer
+        DeviceStatus.OFF -> MaterialTheme.colorScheme.surfaceVariant
+        DeviceStatus.ERROR -> MaterialTheme.colorScheme.errorContainer
+        DeviceStatus.DISCONNECTED -> MaterialTheme.colorScheme.secondaryContainer
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(device.name, style = MaterialTheme.typography.titleMedium)
+                    Text(device.profile.displayName, style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(device.reportedStatus.name, style = MaterialTheme.typography.labelLarge)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Grid ${device.column}, ${device.row}", style = MaterialTheme.typography.bodySmall)
+            val detail = when (val config = device.configuration) {
+                DeviceConfiguration.Outlet -> null
+                is DeviceConfiguration.MultiSwitch -> "${config.channelCount} channels"
+                is DeviceConfiguration.SafetyOutlet ->
+                    "Safety cutoff: ${config.maxOnDurationSeconds / 60} minutes"
+                is DeviceConfiguration.Light ->
+                    if (config.scheduleEnabled) "Schedule enabled" else "Schedule disabled"
+                is DeviceConfiguration.Camera -> "Mock camera media configured"
+            }
+            detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

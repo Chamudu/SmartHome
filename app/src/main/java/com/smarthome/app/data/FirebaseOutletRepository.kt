@@ -8,6 +8,10 @@ import com.smarthome.app.domain.model.CommandState
 import com.smarthome.app.domain.model.DeviceStatus
 import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
+import com.smarthome.app.domain.model.DeviceConfiguration
+import com.smarthome.app.domain.model.DeviceProfile
+import com.smarthome.app.domain.model.NewDevice
+import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.repository.OutletRepository
 import java.util.UUID
 import kotlinx.coroutines.channels.awaitClose
@@ -62,6 +66,88 @@ class FirebaseOutletRepository(
         }
     }
 
+    override fun observeDevices(homeId: String): Flow<List<SmartDevice>> = callbackFlow {
+        val registration = devicesCollection(homeId)
+            .addSnapshotListener { snapshot, exception ->
+                when {
+                    exception != null -> close(exception)
+                    snapshot == null -> close(IllegalStateException("Device snapshot is missing."))
+                    else -> runCatching {
+                        snapshot.documents
+                            .map(DocumentSnapshot::toSmartDevice)
+                            .sortedBy(SmartDevice::name)
+                    }.onSuccess(::trySend).onFailure(::close)
+                }
+            }
+
+        awaitClose { registration.remove() }
+    }
+
+    override suspend fun createDevice(
+        homeId: String,
+        device: NewDevice,
+    ): String {
+        val configuration = when (device.profile) {
+            DeviceProfile.OUTLET -> emptyMap<String, Any>()
+            DeviceProfile.MULTI_SWITCH -> mapOf(
+                "channels" to (1..device.channelCount).map { number ->
+                    mapOf(
+                        "id" to "channel-$number",
+                        "name" to "Switch $number",
+                        "desiredStatus" to PowerState.OFF.name,
+                        "reportedStatus" to DeviceStatus.OFF.name,
+                        "requestId" to null,
+                    )
+                },
+            )
+            DeviceProfile.SAFETY_OUTLET -> mapOf(
+                "maxOnDurationSeconds" to device.maxOnDurationSeconds,
+                "activatedAt" to null,
+                "cutoffDueAt" to null,
+            )
+            DeviceProfile.LIGHT -> mapOf(
+                "schedule" to mapOf(
+                    "enabled" to false,
+                    "startLocalTime" to "18:00",
+                    "endLocalTime" to "22:00",
+                    "timezone" to "Asia/Colombo",
+                    "lastEvaluatedAt" to null,
+                ),
+            )
+            DeviceProfile.CAMERA -> mapOf(
+                "mediaType" to "SNAPSHOT",
+                "mediaUri" to device.mediaUri.trim(),
+                "capturedAt" to FieldValue.serverTimestamp(),
+            )
+        }
+
+        return devicesCollection(homeId).add(
+            mapOf(
+                "name" to device.name.trim(),
+                "profile" to device.profile.name,
+                "floorId" to device.floorId,
+                "roomId" to device.roomId,
+                "position" to mapOf("column" to device.column, "row" to device.row),
+                "desired" to mapOf(
+                    "status" to PowerState.OFF.name,
+                    "requestId" to null,
+                    "requestedBy" to null,
+                    "requestedAt" to null,
+                ),
+                "reported" to mapOf(
+                    "status" to DeviceStatus.OFF.name,
+                    "requestId" to null,
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                    "errorCode" to null,
+                ),
+                "commandState" to CommandState.IDLE.name,
+                "config" to configuration,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ),
+        ).await().id
+    }
+
     override suspend fun requestPowerState(
         homeId: String,
         deviceId: String,
@@ -108,11 +194,54 @@ class FirebaseOutletRepository(
     private fun outletDocument(
         homeId: String,
         deviceId: String,
-    ) = firestore
+    ) = devicesCollection(homeId)
+        .document(deviceId)
+
+    private fun devicesCollection(homeId: String) = firestore
         .collection("homes")
         .document(homeId)
         .collection("devices")
-        .document(deviceId)
+}
+
+private fun DocumentSnapshot.toSmartDevice(): SmartDevice {
+    val profile = DeviceProfile.entries.firstOrNull { it.name == getString("profile") }
+        ?: throw IllegalStateException("Invalid device profile.")
+    val config = get("config") as? Map<*, *> ?: emptyMap<String, Any>()
+    val configuration = when (profile) {
+        DeviceProfile.OUTLET -> DeviceConfiguration.Outlet
+        DeviceProfile.MULTI_SWITCH -> DeviceConfiguration.MultiSwitch(
+            channelCount = (config["channels"] as? List<*>)?.size
+                ?: throw IllegalStateException("Switch channels are missing."),
+        )
+        DeviceProfile.SAFETY_OUTLET -> DeviceConfiguration.SafetyOutlet(
+            maxOnDurationSeconds = config.requiredInt("maxOnDurationSeconds"),
+        )
+        DeviceProfile.LIGHT -> DeviceConfiguration.Light(
+            scheduleEnabled = (config["schedule"] as? Map<*, *>)?.get("enabled") as? Boolean
+                ?: false,
+        )
+        DeviceProfile.CAMERA -> DeviceConfiguration.Camera(
+            mediaUri = config["mediaUri"] as? String ?: "",
+        )
+    }
+    return SmartDevice(
+        id = id,
+        name = getString("name") ?: throw IllegalStateException("Device name is missing."),
+        profile = profile,
+        floorId = getString("floorId") ?: throw IllegalStateException("Device floor is missing."),
+        roomId = getString("roomId"),
+        column = requiredInt("position.column"),
+        row = requiredInt("position.row"),
+        desiredStatus = parsePowerState(getString("desired.status")),
+        reportedStatus = parseDeviceStatus(getString("reported.status")),
+        commandState = parseCommandState(getString("commandState")),
+        configuration = configuration,
+    )
+}
+
+private fun Map<*, *>.requiredInt(field: String): Int {
+    val value = this[field] as? Number ?: throw IllegalStateException("$field is missing.")
+    return value.toInt()
 }
 
 private fun DocumentSnapshot.toOutletDevice(): OutletDevice {

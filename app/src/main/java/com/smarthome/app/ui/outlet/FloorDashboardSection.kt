@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,11 +32,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.smarthome.app.domain.model.FloorPlan
+import com.smarthome.app.domain.model.DeviceProfile
 import com.smarthome.app.domain.model.RoomLayout
+import com.smarthome.app.domain.model.SmartDevice
 
 @Composable
 fun FloorDashboardSection(
@@ -47,6 +55,7 @@ fun FloorDashboardSection(
     onFloorUpdated: (String, Int, Int, Int) -> Unit,
     onRoomUpdated: (String, String, Int, Int, Int, Int) -> Unit,
     onOutletPlaced: (Int, Int) -> Unit,
+    onDeviceCreated: (String, DeviceProfile, Int, Int, Int, Int, String) -> Unit,
 ) {
     var showFloorDialog by remember { mutableStateOf(false) }
     var showRoomDialog by remember { mutableStateOf(false) }
@@ -55,6 +64,8 @@ fun FloorDashboardSection(
     var showFloorEditDialog by remember { mutableStateOf(false) }
     var roomPendingEdit by remember { mutableStateOf<RoomLayout?>(null) }
     var showPlacementDialog by remember { mutableStateOf(false) }
+    var deviceCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var roomDraft by remember { mutableStateOf<RoomLayout?>(null) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -103,7 +114,11 @@ fun FloorDashboardSection(
             state.selectedFloor?.let { floor ->
                 FloorGrid(
                     floor = floor,
-                    outlet = state.outlet?.takeIf { outlet -> outlet.floorId == floor.id },
+                    devices = state.devices.filter { device -> device.floorId == floor.id },
+                    onEmptyCellLongPressed = { column, row -> deviceCell = column to row },
+                    onEmptyAreaDragged = { column, row, width, height ->
+                        roomDraft = RoomLayout("", "", column, row, width, height)
+                    },
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -129,6 +144,9 @@ fun FloorDashboardSection(
                         }
                         TextButton(onClick = { showPlacementDialog = true }) {
                             Text("Place outlet")
+                        }
+                        TextButton(onClick = { deviceCell = 0 to 0 }) {
+                            Text("Add device")
                         }
                 }
 
@@ -205,6 +223,18 @@ fun FloorDashboardSection(
         )
     }
 
+    roomDraft?.let { draft ->
+        AddRoomDialog(
+            isSaving = state.isSavingLayout,
+            initialRoom = draft,
+            onDismiss = { roomDraft = null },
+            onSubmit = { name, column, row, width, height ->
+                onRoomCreated(name, column, row, width, height)
+                roomDraft = null
+            },
+        )
+    }
+
     roomPendingEdit?.let { room ->
         RoomDialog(
             room = room,
@@ -223,6 +253,27 @@ fun FloorDashboardSection(
             onSubmit = { column, row ->
                 onOutletPlaced(column, row)
                 showPlacementDialog = false
+            },
+        )
+    }
+
+    deviceCell?.let { (column, row) ->
+        AddDeviceDialog(
+            initialColumn = column,
+            initialRow = row,
+            isSaving = state.isCreatingDevice,
+            onDismiss = { deviceCell = null },
+            onSubmit = { name, profile, deviceColumn, deviceRow, channels, duration, uri ->
+                onDeviceCreated(
+                    name,
+                    profile,
+                    deviceColumn,
+                    deviceRow,
+                    channels,
+                    duration,
+                    uri,
+                )
+                deviceCell = null
             },
         )
     }
@@ -271,17 +322,83 @@ private fun ConfirmationDialog(
 @Composable
 private fun FloorGrid(
     floor: FloorPlan,
-    outlet: com.smarthome.app.domain.model.OutletDevice?,
+    devices: List<SmartDevice>,
+    onEmptyCellLongPressed: (Int, Int) -> Unit,
+    onEmptyAreaDragged: (Int, Int, Int, Int) -> Unit,
 ) {
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val roomBackground = MaterialTheme.colorScheme.secondaryContainer
     val roomBorder = MaterialTheme.colorScheme.secondary
+    val hapticFeedback = LocalHapticFeedback.current
+    var dragStartCell by remember(floor.id) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var dragEndCell by remember(floor.id) { mutableStateOf<Pair<Int, Int>?>(null) }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(floor.gridColumns.toFloat() / floor.gridRows)
-            .border(1.dp, MaterialTheme.colorScheme.outline),
+            .border(1.dp, MaterialTheme.colorScheme.outline)
+            .pointerInput(floor.id, devices) {
+                detectTapGestures(
+                    onLongPress = { offset ->
+                        val column = (offset.x / size.width * floor.gridColumns)
+                            .toInt().coerceIn(0, floor.gridColumns - 1)
+                        val row = (offset.y / size.height * floor.gridRows)
+                            .toInt().coerceIn(0, floor.gridRows - 1)
+                        if (devices.none { it.column == column && it.row == row }) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onEmptyCellLongPressed(column, row)
+                        }
+                    },
+                )
+            }
+            .pointerInput(floor.id, floor.rooms) {
+                fun Offset.toCell(): Pair<Int, Int> {
+                    val column = (x / size.width * floor.gridColumns)
+                        .toInt().coerceIn(0, floor.gridColumns - 1)
+                    val row = (y / size.height * floor.gridRows)
+                        .toInt().coerceIn(0, floor.gridRows - 1)
+                    return column to row
+                }
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        val cell = offset.toCell()
+                        val startsInsideRoom = floor.rooms.any { room ->
+                            cell.first in room.column until room.right &&
+                                cell.second in room.row until room.bottom
+                        }
+                        if (!startsInsideRoom) {
+                            dragStartCell = cell
+                            dragEndCell = cell
+                        }
+                    },
+                    onDrag = { change, _ ->
+                        if (dragStartCell != null) dragEndCell = change.position.toCell()
+                    },
+                    onDragCancel = {
+                        dragStartCell = null
+                        dragEndCell = null
+                    },
+                    onDragEnd = {
+                        val start = dragStartCell
+                        val end = dragEndCell
+                        if (start != null && end != null) {
+                            val left = minOf(start.first, end.first)
+                            val top = minOf(start.second, end.second)
+                            val right = maxOf(start.first, end.first)
+                            val bottom = maxOf(start.second, end.second)
+                            onEmptyAreaDragged(
+                                left,
+                                top,
+                                right - left + 1,
+                                bottom - top + 1,
+                            )
+                        }
+                        dragStartCell = null
+                        dragEndCell = null
+                    },
+                )
+            },
     ) {
         val cellWidth = maxWidth / floor.gridColumns
         val cellHeight = maxHeight / floor.gridRows
@@ -326,7 +443,26 @@ private fun FloorGrid(
             }
         }
 
-        outlet?.let { device ->
+        val start = dragStartCell
+        val end = dragEndCell
+        if (start != null && end != null) {
+            val left = minOf(start.first, end.first)
+            val top = minOf(start.second, end.second)
+            val right = maxOf(start.first, end.first)
+            val bottom = maxOf(start.second, end.second)
+            Box(
+                modifier = Modifier
+                    .offset(x = cellWidth * left, y = cellHeight * top)
+                    .size(
+                        width = cellWidth * (right - left + 1),
+                        height = cellHeight * (bottom - top + 1),
+                    )
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
+                    .border(2.dp, MaterialTheme.colorScheme.primary),
+            )
+        }
+
+        devices.forEach { device ->
             Box(
                 modifier = Modifier
                     .offset(
@@ -339,7 +475,7 @@ private fun FloorGrid(
                     .padding(2.dp),
             ) {
                 Text(
-                    text = "Outlet\n${device.reportedStatus.name}",
+                    text = "${device.profile.displayName}\n${device.reportedStatus.name}",
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -347,6 +483,125 @@ private fun FloorGrid(
             }
         }
     }
+}
+
+@Composable
+private fun AddDeviceDialog(
+    initialColumn: Int,
+    initialRow: Int,
+    isSaving: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: (String, DeviceProfile, Int, Int, Int, Int, String) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var profile by remember { mutableStateOf(DeviceProfile.OUTLET) }
+    var column by remember { mutableStateOf(initialColumn.toString()) }
+    var row by remember { mutableStateOf(initialRow.toString()) }
+    var channels by remember { mutableStateOf("2") }
+    var duration by remember { mutableStateOf("15") }
+    var mediaUri by remember { mutableStateOf("https://placehold.co/640x360") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add device") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Device profile", style = MaterialTheme.typography.labelLarge)
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    DeviceProfile.entries.forEach { option ->
+                        if (option == profile) {
+                            Button(onClick = { profile = option }) { Text(option.displayName) }
+                        } else {
+                            TextButton(onClick = { profile = option }) { Text(option.displayName) }
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Name") },
+                    singleLine = true,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = column,
+                        onValueChange = { column = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Column") },
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = row,
+                        onValueChange = { row = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Row") },
+                        singleLine = true,
+                    )
+                }
+                when (profile) {
+                    DeviceProfile.MULTI_SWITCH -> OutlinedTextField(
+                        value = channels,
+                        onValueChange = { channels = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Channels (2, 3, or 5)") },
+                        singleLine = true,
+                    )
+                    DeviceProfile.SAFETY_OUTLET -> OutlinedTextField(
+                        value = duration,
+                        onValueChange = { duration = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Maximum on-time (minutes)") },
+                        singleLine = true,
+                    )
+                    DeviceProfile.CAMERA -> OutlinedTextField(
+                        value = mediaUri,
+                        onValueChange = { mediaUri = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Mock media HTTPS URI") },
+                        singleLine = true,
+                    )
+                    else -> Unit
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Text(
+                    "Tip: long-pressing a grid cell prefills its coordinate.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = {
+                    val parsedColumn = column.toIntOrNull()
+                    val parsedRow = row.toIntOrNull()
+                    val parsedChannels = channels.toIntOrNull()
+                    val parsedDuration = duration.toIntOrNull()
+                    if (name.isBlank()) {
+                        error = "Enter a device name."
+                    } else if (
+                        parsedColumn == null || parsedRow == null ||
+                        parsedChannels == null || parsedDuration == null
+                    ) {
+                        error = "Coordinates and configuration must be whole numbers."
+                    } else {
+                        onSubmit(
+                            name,
+                            profile,
+                            parsedColumn,
+                            parsedRow,
+                            parsedChannels,
+                            parsedDuration,
+                            mediaUri,
+                        )
+                    }
+                },
+            ) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
@@ -405,10 +660,11 @@ private fun FloorDialog(
 @Composable
 private fun AddRoomDialog(
     isSaving: Boolean,
+    initialRoom: RoomLayout? = null,
     onDismiss: () -> Unit,
     onSubmit: (String, Int, Int, Int, Int) -> Unit,
 ) {
-    RoomDialog(null, isSaving, onDismiss, onSubmit)
+    RoomDialog(initialRoom, isSaving, onDismiss, onSubmit)
 }
 
 @Composable
@@ -418,6 +674,7 @@ private fun RoomDialog(
     onDismiss: () -> Unit,
     onSubmit: (String, Int, Int, Int, Int) -> Unit,
 ) {
+    val isNew = room == null || room.id.isBlank()
     var name by remember { mutableStateOf(room?.name.orEmpty()) }
     var column by remember { mutableStateOf(room?.column?.toString() ?: "0") }
     var row by remember { mutableStateOf(room?.row?.toString() ?: "0") }
@@ -427,7 +684,7 @@ private fun RoomDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (room == null) "Add room" else "Edit room") },
+        title = { Text(if (isNew) "Add room" else "Edit room") },
         text = {
             LayoutForm(
                 fields = listOf(
@@ -451,7 +708,7 @@ private fun RoomDialog(
                         onSubmit(name, values[0]!!, values[1]!!, values[2]!!, values[3]!!)
                     }
                 },
-            ) { Text(if (room == null) "Create" else "Save") }
+            ) { Text(if (isNew) "Create" else "Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

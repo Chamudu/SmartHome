@@ -199,6 +199,15 @@ CAMERA
   config.capturedAt
 ```
 
+Android represents these alternatives as an exhaustive sealed configuration hierarchy selected by the
+required `profile` discriminator. New client-created devices begin with desired and reported status
+`OFF`, command state `IDLE`, null request correlation, and server-generated timestamps. Creation is one
+document write, so listeners never observe a partially initialized profile.
+
+The device marker coordinate is unique by application validation for the current editor. Firestore
+Rules validate floor/room containment and the complete profile shape; strict coordinate uniqueness
+across simultaneous creators would require a deterministic coordinate index or trusted transaction.
+
 Multi-switch channel state is embedded because channel count is small and the unit is normally read as
 one entity. Channel array updates must use a transaction to prevent one concurrent channel update from
 overwriting another.

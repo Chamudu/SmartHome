@@ -6,9 +6,12 @@ import com.smarthome.app.data.FirebaseFloorRepository
 import com.smarthome.app.data.FirebaseOutletRepository
 import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.LayoutViolation
+import com.smarthome.app.domain.model.DeviceProfile
+import com.smarthome.app.domain.model.NewDevice
 import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.RoomLayout
+import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.FloorContainsDevicesException
 import com.smarthome.app.domain.repository.RoomContainsDevicesException
@@ -30,6 +33,9 @@ data class OutletUiState(
     val isLoadingOutlet: Boolean = false,
     val isSendingCommand: Boolean = false,
     val outlet: OutletDevice? = null,
+    val devices: List<SmartDevice> = emptyList(),
+    val isLoadingDevices: Boolean = false,
+    val isCreatingDevice: Boolean = false,
     val errorMessage: String? = null,
     val floors: List<FloorPlan> = emptyList(),
     val selectedFloorId: String? = null,
@@ -58,12 +64,14 @@ class OutletViewModel(
     val uiState: StateFlow<OutletUiState> = mutableUiState.asStateFlow()
 
     private var outletObservation: Job? = null
+    private var deviceObservation: Job? = null
     private var floorObservation: Job? = null
     private var roomObservation: Job? = null
 
     init {
         if (repository.hasAuthenticatedUser) {
             observeOutlet()
+            observeDevices()
             observeFloors()
         }
     }
@@ -119,6 +127,7 @@ class OutletViewModel(
                     )
                 }
                 observeOutlet()
+                observeDevices()
                 observeFloors()
             }.onFailure {
                 mutableUiState.update {
@@ -339,13 +348,13 @@ class OutletViewModel(
         current.rooms.forEach { room ->
             violations += FloorLayoutValidator.validateRoom(updated, room)
         }
-        mutableUiState.value.outlet
-            ?.takeIf { outlet -> outlet.floorId == current.id }
-            ?.let { outlet ->
+        mutableUiState.value.devices
+            .filter { device -> device.floorId == current.id }
+            .forEach { device ->
                 violations += FloorLayoutValidator.validateDevicePosition(
                     updated,
-                    outlet.column,
-                    outlet.row,
+                    device.column,
+                    device.row,
                 )
             }
 
@@ -373,13 +382,13 @@ class OutletViewModel(
         val room = RoomLayout(roomId, name, column, row, width, height)
         val violations = FloorLayoutValidator.validateRoom(floor, room)
             .toMutableSet()
-        mutableUiState.value.outlet
-            ?.takeIf { outlet -> outlet.roomId == roomId }
-            ?.takeUnless { outlet ->
-                outlet.column in room.column until room.right &&
-                    outlet.row in room.row until room.bottom
+        mutableUiState.value.devices
+            .filter { device -> device.roomId == roomId }
+            .filterNot { device ->
+                device.column in room.column until room.right &&
+                    device.row in room.row until room.bottom
             }
-            ?.let {
+            .forEach {
                 violations += LayoutViolation.DEVICE_POSITION_OUTSIDE_ROOM
             }
         if (violations.isNotEmpty()) {
@@ -424,6 +433,75 @@ class OutletViewModel(
             successMessage = "Outlet placed.",
             failureMessage = "The outlet could not be placed.",
         )
+    }
+
+    fun createDevice(
+        name: String,
+        profile: DeviceProfile,
+        column: Int,
+        row: Int,
+        channelCount: Int,
+        maxOnDurationMinutes: Int,
+        mediaUri: String,
+    ) {
+        val floor = mutableUiState.value.selectedFloor ?: return
+        val message = when {
+            name.isBlank() -> "Enter a device name."
+            FloorLayoutValidator.validateDevicePosition(floor, column, row).isNotEmpty() ->
+                "The device position is outside the floor grid."
+            mutableUiState.value.devices.any { device ->
+                device.floorId == floor.id && device.column == column && device.row == row
+            } -> "That grid cell already contains a device."
+            profile == DeviceProfile.MULTI_SWITCH && channelCount !in setOf(2, 3, 5) ->
+                "A multi-switch must have 2, 3, or 5 channels."
+            profile == DeviceProfile.SAFETY_OUTLET && maxOnDurationMinutes !in 1..240 ->
+                "Safety duration must be between 1 and 240 minutes."
+            profile == DeviceProfile.CAMERA && !mediaUri.startsWith("https://") ->
+                "Camera media must use an HTTPS URI."
+            else -> null
+        }
+        if (message != null) {
+            mutableUiState.update { it.copy(layoutMessage = message) }
+            return
+        }
+
+        val roomId = floor.rooms.firstOrNull { room ->
+            column in room.column until room.right && row in room.row until room.bottom
+        }?.id
+
+        if (mutableUiState.value.isCreatingDevice) return
+        viewModelScope.launch {
+            mutableUiState.update {
+                it.copy(isCreatingDevice = true, layoutMessage = null)
+            }
+            runCatching {
+                repository.createDevice(
+                    HOME_ID,
+                    NewDevice(
+                        name = name,
+                        profile = profile,
+                        floorId = floor.id,
+                        roomId = roomId,
+                        column = column,
+                        row = row,
+                        channelCount = channelCount,
+                        maxOnDurationSeconds = maxOnDurationMinutes * 60,
+                        mediaUri = mediaUri,
+                    ),
+                )
+            }.onSuccess {
+                mutableUiState.update {
+                    it.copy(isCreatingDevice = false, layoutMessage = "Device created.")
+                }
+            }.onFailure {
+                mutableUiState.update {
+                    it.copy(
+                        isCreatingDevice = false,
+                        layoutMessage = "The device could not be created.",
+                    )
+                }
+            }
+        }
     }
 
     fun deleteSelectedFloor() {
@@ -497,6 +575,8 @@ class OutletViewModel(
     fun signOut() {
         outletObservation?.cancel()
         outletObservation = null
+        deviceObservation?.cancel()
+        deviceObservation = null
         floorObservation?.cancel()
         floorObservation = null
         roomObservation?.cancel()
@@ -537,6 +617,31 @@ class OutletViewModel(
                         state.copy(
                             isLoadingOutlet = false,
                             outlet = outlet,
+                            errorMessage = null,
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun observeDevices() {
+        deviceObservation?.cancel()
+        mutableUiState.update { it.copy(isLoadingDevices = true) }
+        deviceObservation = viewModelScope.launch {
+            repository.observeDevices(HOME_ID)
+                .catch {
+                    mutableUiState.update {
+                        it.copy(
+                            isLoadingDevices = false,
+                            errorMessage = "Devices could not be loaded.",
+                        )
+                    }
+                }
+                .collect { devices ->
+                    mutableUiState.update {
+                        it.copy(
+                            devices = devices,
+                            isLoadingDevices = false,
                             errorMessage = null,
                         )
                     }

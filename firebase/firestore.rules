@@ -100,6 +100,91 @@ service cloud.firestore {
         && data.position.row < room.row + room.height;
     }
 
+    function validDeviceConfig(data) {
+      return (data.profile == 'OUTLET' && data.config.keys().hasOnly([]))
+        || (data.profile == 'MULTI_SWITCH'
+          && data.config.keys().hasOnly(['channels'])
+          && validSwitchChannels(data.config.channels))
+        || (data.profile == 'SAFETY_OUTLET'
+          && data.config.keys().hasOnly([
+            'maxOnDurationSeconds', 'activatedAt', 'cutoffDueAt'
+          ])
+          && data.config.maxOnDurationSeconds is int
+          && data.config.maxOnDurationSeconds >= 60
+          && data.config.maxOnDurationSeconds <= 14400
+          && data.config.activatedAt == null
+          && data.config.cutoffDueAt == null)
+        || (data.profile == 'LIGHT'
+          && data.config.keys().hasOnly(['schedule'])
+          && data.config.schedule.keys().hasOnly([
+            'enabled', 'startLocalTime', 'endLocalTime', 'timezone', 'lastEvaluatedAt'
+          ])
+          && data.config.schedule.enabled == false
+          && data.config.schedule.startLocalTime is string
+          && data.config.schedule.endLocalTime is string
+          && data.config.schedule.timezone is string
+          && data.config.schedule.lastEvaluatedAt == null)
+        || (data.profile == 'CAMERA'
+          && data.config.keys().hasOnly(['mediaType', 'mediaUri', 'capturedAt'])
+          && data.config.mediaType == 'SNAPSHOT'
+          && data.config.mediaUri is string
+          && data.config.mediaUri.matches('https://.*')
+          && data.config.capturedAt is timestamp);
+    }
+
+    function validSwitchChannel(channel) {
+      return channel.keys().hasOnly([
+          'id', 'name', 'desiredStatus', 'reportedStatus', 'requestId'
+        ])
+        && channel.id is string
+        && channel.name is string
+        && channel.name.size() > 0
+        && channel.desiredStatus == 'OFF'
+        && channel.reportedStatus == 'OFF'
+        && channel.requestId == null;
+    }
+
+    function validSwitchChannels(channels) {
+      return channels is list
+        && channels.size() in [2, 3, 5]
+        && validSwitchChannel(channels[0])
+        && validSwitchChannel(channels[1])
+        && (channels.size() < 3 || validSwitchChannel(channels[2]))
+        && (channels.size() < 5 || (
+          validSwitchChannel(channels[3]) && validSwitchChannel(channels[4])
+        ));
+    }
+
+    function validNewDevice(homeId, data) {
+      return data.keys().hasOnly([
+          'name', 'profile', 'floorId', 'roomId', 'position', 'desired',
+          'reported', 'commandState', 'config', 'createdAt', 'updatedAt'
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && data.profile in ['OUTLET', 'MULTI_SWITCH', 'SAFETY_OUTLET', 'LIGHT', 'CAMERA']
+        && validDevicePlacement(homeId, data)
+        && data.desired.keys().hasOnly([
+          'status', 'requestId', 'requestedBy', 'requestedAt'
+        ])
+        && data.desired.status == 'OFF'
+        && data.desired.requestId == null
+        && data.desired.requestedBy == null
+        && data.desired.requestedAt == null
+        && data.reported.keys().hasOnly([
+          'status', 'requestId', 'updatedAt', 'errorCode'
+        ])
+        && data.reported.status == 'OFF'
+        && data.reported.requestId == null
+        && data.reported.updatedAt is timestamp
+        && data.reported.errorCode == null
+        && data.commandState == 'IDLE'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && validDeviceConfig(data);
+    }
+
     match /users/{userId} {
       allow read: if signedIn() && request.auth.uid == userId;
       allow create: if signedIn() && request.auth.uid == userId;
@@ -149,8 +234,7 @@ service cloud.firestore {
       match /devices/{deviceId} {
         allow read: if activeMember(homeId);
         allow create: if hasRole(homeId, ['OWNER', 'OPERATOR'])
-          && validStatus(request.resource.data.reported.status)
-          && validPowerStatus(request.resource.data.desired.status);
+          && validNewDevice(homeId, request.resource.data);
 
         allow update: if ownerOrOperatorDesiredStateUpdate(homeId)
           || simulatorReportedStateUpdate(homeId)
