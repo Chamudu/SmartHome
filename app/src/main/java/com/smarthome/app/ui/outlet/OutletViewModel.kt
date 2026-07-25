@@ -15,6 +15,7 @@ import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.HomeAlert
+import com.smarthome.app.domain.model.defaultFloorName
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.FloorContainsDevicesException
 import com.smarthome.app.domain.repository.RoomContainsDevicesException
@@ -41,6 +42,7 @@ data class OutletUiState(
     val isCreatingDevice: Boolean = false,
     val switchCommandsInFlight: Set<String> = emptySet(),
     val deviceCommandsInFlight: Set<String> = emptySet(),
+    val scheduleUpdatesInFlight: Set<String> = emptySet(),
     val alerts: List<HomeAlert> = emptyList(),
     val isLoadingAlerts: Boolean = false,
     val errorMessage: String? = null,
@@ -266,6 +268,58 @@ class OutletViewModel(
         }
     }
 
+    fun updateLightSchedule(
+        deviceId: String,
+        enabled: Boolean,
+        startLocalTime: String,
+        endLocalTime: String,
+        timezone: String,
+    ) {
+        val device = mutableUiState.value.devices.firstOrNull { it.id == deviceId }
+        if (device?.profile != DeviceProfile.LIGHT ||
+            deviceId in mutableUiState.value.scheduleUpdatesInFlight
+        ) return
+
+        val start = startLocalTime.trim()
+        val end = endLocalTime.trim()
+        val zone = timezone.trim()
+        if (!TIME_PATTERN.matches(start) || !TIME_PATTERN.matches(end)) {
+            mutableUiState.update { it.copy(errorMessage = "Use 24-hour time in HH:mm format.") }
+            return
+        }
+        if (start == end) {
+            mutableUiState.update { it.copy(errorMessage = "Start and end times must be different.") }
+            return
+        }
+        if (zone.isBlank() || zone.length > 64) {
+            mutableUiState.update { it.copy(errorMessage = "Enter a valid timezone.") }
+            return
+        }
+
+        viewModelScope.launch {
+            mutableUiState.update {
+                it.copy(
+                    scheduleUpdatesInFlight = it.scheduleUpdatesInFlight + deviceId,
+                    errorMessage = null,
+                )
+            }
+            runCatching {
+                repository.updateLightSchedule(HOME_ID, deviceId, enabled, start, end, zone)
+            }.onSuccess {
+                mutableUiState.update {
+                    it.copy(scheduleUpdatesInFlight = it.scheduleUpdatesInFlight - deviceId)
+                }
+            }.onFailure {
+                mutableUiState.update {
+                    it.copy(
+                        scheduleUpdatesInFlight = it.scheduleUpdatesInFlight - deviceId,
+                        errorMessage = "The light schedule could not be saved.",
+                    )
+                }
+            }
+        }
+    }
+
     fun selectFloor(floorId: String) {
         if (mutableUiState.value.floors.none { floor -> floor.id == floorId }) {
             return
@@ -291,8 +345,9 @@ class OutletViewModel(
         gridColumns: Int,
         gridRows: Int,
     ) {
+        val resolvedName = name.trim().ifBlank { defaultFloorName(level) }
         val violations = FloorLayoutValidator.validateFloor(
-            name = name,
+            name = resolvedName,
             level = level,
             gridColumns = gridColumns,
             gridRows = gridRows,
@@ -319,7 +374,7 @@ class OutletViewModel(
             runCatching {
                 floorRepository.createFloor(
                     homeId = HOME_ID,
-                    name = name,
+                    name = resolvedName,
                     level = level,
                     gridColumns = gridColumns,
                     gridRows = gridRows,
@@ -907,6 +962,7 @@ class OutletViewModel(
     private companion object {
         const val HOME_ID = "demo-home"
         const val OUTLET_ID = "main-outlet"
+        val TIME_PATTERN = Regex("(?:[01]\\d|2[0-3]):[0-5]\\d")
     }
 }
 

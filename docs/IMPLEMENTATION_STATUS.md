@@ -29,15 +29,21 @@ Status date: 2026-07-25
   simulator acknowledgements/manual reports.
 - Task-focused Devices/Layout tabs and direct power switches for outlet, safety-outlet, and light cards.
 - Explicit pending/error/disconnected explanations and clearer wording for unconfigured light automation.
+- Visual device dashboard with a blue home header, profile icons, status summary tiles, rounded cards,
+  and display names instead of internal floor/room identifiers.
+- Convention-based floor names derived from unique levels during creation, with editable names afterward.
+- Light schedule editor with 24-hour time, IANA timezone, overnight-window support, and role-restricted
+  Firestore updates.
+- Timezone-aware scheduled light evaluator implemented for local Functions verification.
 
 ## Current verification evidence
 
 | Layer | Evidence |
 | --- | --- |
-| Android domain/ViewModel | 23 passing JUnit tests |
+| Android domain/ViewModel | 26 passing JUnit tests |
 | Android packaging | `:app:assembleDebug` succeeds |
-| Firestore authorization/schema | 30 passing emulator-backed Vitest tests |
-| Cloud Functions | TypeScript build and 5 Vitest state-machine tests pass |
+| Firestore authorization/schema | 33 passing emulator-backed Vitest tests |
+| Cloud Functions | TypeScript build and 8 Vitest decision tests pass |
 | Simulator | TypeScript typecheck, Oxlint, and Vite production build succeed |
 | Cloud rules | Tested rules deployed successfully to the development Firebase project |
 | Physical integration | Outlet synchronization and earlier floor lifecycle accepted on a phone |
@@ -46,12 +52,12 @@ Status date: 2026-07-25
 
 - Branded theme on representative light/dark system modes.
 - Automatic cutoff and persistent alert display after production Functions deployment.
+- Scheduled light execution after production Functions deployment.
 
 ## Not implemented yet
 
 - Touch resize/move for existing rooms; device movement currently uses a coordinate form after tapping.
 - Editing an existing safety duration and production deployment of the verified cutoff functions.
-- Scheduled light execution.
 - Camera snapshot rendering/upload and optional second-phone camera node.
 - Executing the seed against a target environment still requires owner credentials exported locally.
 - Activity reporting, offline demonstration, CI, and signed release packaging.

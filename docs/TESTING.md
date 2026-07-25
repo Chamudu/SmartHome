@@ -48,9 +48,16 @@ npm --prefix functions run check
 - Owner channel requests cannot forge reported state; simulator reports cannot change desired state.
 - A channel write preserves every unrelated channel, and transactional clients re-read before updating
   the embedded array.
+- Floor creation derives a conventional name from its unique logical level.
+- A valid overnight light schedule reaches the repository; malformed `HH:mm` input is stopped locally.
+- Owners may edit only light schedule configuration, while malformed times and simulator edits are denied.
+- The backend evaluator covers normal and overnight windows, exclusive end boundaries, invalid times,
+  equal endpoints, and invalid IANA timezone identifiers.
 
 ## Manual acceptance focus
 
 Automated tests do not prove gesture arbitration, visual contrast, haptic feedback, font scaling, or
 real network timing. These require a physical phone plus the simulator and Firebase development project.
 Record the tested build commit, device/Android version, steps, expected result, and observed result.
+For light scheduling, run Functions locally unless production scheduled infrastructure has been
+separately authorized; a source build does not imply a cloud deployment.

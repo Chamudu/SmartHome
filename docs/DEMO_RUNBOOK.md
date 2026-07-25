@@ -34,13 +34,14 @@ screenshots or recordings.
 11. Toggle two different channels in Android; show each channel acknowledge independently in the
     simulator, then simulate a channel error without changing the other channel.
 12. Briefly show emulator-backed rule tests as evidence that direct APIs cannot bypass authorization.
-13. With deployed functions, turn on a short-duration safety outlet and show automatic `OFF`, its event,
+13. Open a light card, save an overnight schedule, and show the schedule text update reactively. When
+    running the local Functions emulator, choose a near-current window and show the resulting desired
+    command and simulator acknowledgement.
+14. With deployed functions, turn on a short-duration safety outlet and show automatic `OFF`, its event,
     and the persistent critical alert in Android. Allow for the scheduler's one-minute scan interval.
 
 ## Planned final walkthrough additions
 
-- Independent multi-switch channel control.
-- Timezone-aware light schedule execution.
 - Camera snapshot, capture time, placeholder/error behavior, and optional camera phone upload.
 - Activity history and usage totals.
 

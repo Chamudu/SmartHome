@@ -157,6 +157,28 @@ beforeEach(async () => {
       updatedAt: now,
     })
 
+    await setDoc(doc(database, 'homes', HOME_ID, 'devices', 'porch-light'), {
+      name: 'Porch light',
+      profile: 'LIGHT',
+      floorId: 'ground-floor',
+      roomId: 'utility',
+      position: { row: 3, column: 3 },
+      desired: { status: 'OFF', requestId: null, requestedBy: null, requestedAt: null },
+      reported: { status: 'OFF', requestId: null, updatedAt: now, errorCode: null },
+      commandState: 'IDLE',
+      config: {
+        schedule: {
+          enabled: false,
+          startLocalTime: '18:00',
+          endLocalTime: '22:00',
+          timezone: 'Asia/Colombo',
+          lastEvaluatedAt: null,
+        },
+      },
+      createdAt: now,
+      updatedAt: now,
+    })
+
     await setDoc(doc(database, 'homes', HOME_ID, 'alerts', 'safety-alert-1'), {
       deviceId: DEVICE_ID,
       eventId: 'safety-event-1',
@@ -524,6 +546,38 @@ describe('device placement validation', () => {
         updatedAt: new Date(),
       }),
     )
+  })
+})
+
+describe('light schedule authorization', () => {
+  const lightPath = ['homes', HOME_ID, 'devices', 'porch-light']
+
+  it('allows an owner to save an overnight schedule', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    await assertSucceeds(updateDoc(doc(database, ...lightPath), {
+      'config.schedule.enabled': true,
+      'config.schedule.startLocalTime': '18:00',
+      'config.schedule.endLocalTime': '06:00',
+      'config.schedule.timezone': 'Asia/Colombo',
+      updatedAt: new Date(),
+    }))
+  })
+
+  it('denies an invalid local time', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    await assertFails(updateDoc(doc(database, ...lightPath), {
+      'config.schedule.enabled': true,
+      'config.schedule.startLocalTime': '25:00',
+      updatedAt: new Date(),
+    }))
+  })
+
+  it('denies a simulator changing schedule configuration', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+    await assertFails(updateDoc(doc(database, ...lightPath), {
+      'config.schedule.enabled': true,
+      updatedAt: new Date(),
+    }))
   })
 })
 

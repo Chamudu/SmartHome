@@ -44,6 +44,15 @@ interface OutletRepository {
         powerState: PowerState,
     )
 
+    suspend fun updateLightSchedule(
+        homeId: String,
+        deviceId: String,
+        enabled: Boolean,
+        startLocalTime: String,
+        endLocalTime: String,
+        timezone: String,
+    )
+
     suspend fun placeOutlet(
         homeId: String,
         deviceId: String,

@@ -18,6 +18,9 @@ The current authenticated dashboard introduces two task-focused tabs as an incre
 - **Layout** — floor selection, grid editing, rooms, placement, and device creation.
 
 This keeps frequent monitoring actions visible without mixing them into the longer administration flow.
+The Devices tab uses a high-contrast home header, compact Online/Active/Alerts summaries, profile icons,
+and rounded state cards. User-facing labels resolve floor and room names; document IDs remain diagnostic
+metadata and are not primary mobile copy.
 
 ## Primary user flows
 
@@ -62,6 +65,16 @@ Backend turns device off → Alert appears → User opens alert → Device/event
 
 The alert explains what happened, when it occurred, which configured limit was exceeded, and the final
 device state.
+
+### Configure a light schedule
+
+```text
+Devices → Light card → Edit schedule → Enable → Enter ON/OFF time and timezone → Save
+```
+
+Times use strict 24-hour `HH:mm` values. A start later than the end represents an overnight window, such
+as `18:00–06:00`. Manual switching remains available; the next evaluator run reconciles the light with
+its configured schedule.
 
 ## Initial mobile wireframes
 

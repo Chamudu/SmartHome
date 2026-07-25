@@ -37,7 +37,7 @@ completed items should remain checked for release traceability.
 - [x] Implement independent control and simulator reporting for variable-channel switch units.
 - [x] Implement initial safety-critical device duration configuration.
 - [x] Implement and locally verify the trusted maximum-duration cutoff.
-- [ ] Implement scheduled light operation with timezone-aware server timestamps.
+- [x] Implement scheduled light configuration and a timezone-aware backend evaluator.
 - [x] Implement persistent realtime safety-alert display.
 - [ ] Add complete alert history and per-user read acknowledgement.
 - [ ] Implement mock camera snapshots or stream links.
@@ -57,7 +57,7 @@ completed items should remain checked for release traceability.
 
 - [x] Review Firestore Security Rules with emulator tests.
 - [ ] Test concurrent changes and repeated backend events.
-- [ ] Test scheduling and safety behavior across timezone boundaries.
+- [x] Test daytime, overnight, boundary, malformed-time, and invalid-timezone schedule decisions.
 - [ ] Add CI checks for Android, backend, rules, and simulator.
 - [ ] Write setup, deployment, and demo runbooks.
 - [ ] Capture product screenshots and architecture diagrams.

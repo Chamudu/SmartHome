@@ -37,3 +37,13 @@ enum class LayoutViolation {
     DEVICE_POSITION_OUTSIDE_FLOOR,
     DEVICE_POSITION_OUTSIDE_ROOM,
 }
+
+fun defaultFloorName(level: Int): String = when (level) {
+    in Int.MIN_VALUE..-2 -> "Basement ${-level.toLong()}"
+    -1 -> "Basement"
+    0 -> "Ground floor"
+    1 -> "First floor"
+    2 -> "Second floor"
+    3 -> "Third floor"
+    else -> "${level}th floor"
+}

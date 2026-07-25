@@ -228,6 +228,25 @@ class FirebaseOutletRepository(
         }.await()
     }
 
+    override suspend fun updateLightSchedule(
+        homeId: String,
+        deviceId: String,
+        enabled: Boolean,
+        startLocalTime: String,
+        endLocalTime: String,
+        timezone: String,
+    ) {
+        outletDocument(homeId, deviceId).update(
+            mapOf(
+                "config.schedule.enabled" to enabled,
+                "config.schedule.startLocalTime" to startLocalTime,
+                "config.schedule.endLocalTime" to endLocalTime,
+                "config.schedule.timezone" to timezone,
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ),
+        ).await()
+    }
+
     override suspend fun placeOutlet(
         homeId: String,
         deviceId: String,
@@ -301,8 +320,10 @@ private fun DocumentSnapshot.toSmartDevice(): SmartDevice {
             maxOnDurationSeconds = config.requiredInt("maxOnDurationSeconds"),
         )
         DeviceProfile.LIGHT -> DeviceConfiguration.Light(
-            scheduleEnabled = (config["schedule"] as? Map<*, *>)?.get("enabled") as? Boolean
-                ?: false,
+            scheduleEnabled = (config["schedule"] as? Map<*, *>)?.get("enabled") as? Boolean ?: false,
+            startLocalTime = (config["schedule"] as? Map<*, *>)?.get("startLocalTime") as? String ?: "18:00",
+            endLocalTime = (config["schedule"] as? Map<*, *>)?.get("endLocalTime") as? String ?: "22:00",
+            timezone = (config["schedule"] as? Map<*, *>)?.get("timezone") as? String ?: "Asia/Colombo",
         )
         DeviceProfile.CAMERA -> DeviceConfiguration.Camera(
             mediaUri = config["mediaUri"] as? String ?: "",

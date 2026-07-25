@@ -44,6 +44,7 @@ import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.DeviceProfile
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.model.SmartDevice
+import com.smarthome.app.domain.model.defaultFloorName
 
 @Composable
 fun FloorDashboardSection(
@@ -707,15 +708,24 @@ private fun FloorDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (floor == null) "Add floor" else "Edit floor") },
         text = {
-            LayoutForm(
-                fields = listOf(
-                    LayoutField("Name", name) { name = it },
-                    LayoutField("Level (ground = 0)", level) { level = it },
-                    LayoutField("Columns", columns) { columns = it },
-                    LayoutField("Rows", rows) { rows = it },
-                ),
-                error = formError,
-            )
+            val parsedLevel = level.toIntOrNull()
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (floor == null) {
+                    Text(
+                        text = "Name: ${parsedLevel?.let(::defaultFloorName) ?: "Enter a level"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                LayoutForm(
+                    fields = buildList {
+                        if (floor != null) add(LayoutField("Name", name) { name = it })
+                        add(LayoutField("Level (ground = 0)", level) { level = it })
+                        add(LayoutField("Columns", columns) { columns = it })
+                        add(LayoutField("Rows", rows) { rows = it })
+                    },
+                    error = formError,
+                )
+            }
         },
         confirmButton = {
             TextButton(
@@ -725,7 +735,12 @@ private fun FloorDialog(
                     if (values.any { it == null }) {
                         formError = "Level and grid dimensions must be whole numbers."
                     } else {
-                        onSubmit(name, values[0]!!, values[1]!!, values[2]!!)
+                        val resolvedName = if (floor == null) {
+                            defaultFloorName(values[0]!!)
+                        } else {
+                            name
+                        }
+                        onSubmit(resolvedName, values[0]!!, values[1]!!, values[2]!!)
                     }
                 },
             ) { Text(if (floor == null) "Create" else "Save") }

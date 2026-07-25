@@ -10,6 +10,7 @@ import {
   shouldStartSafetyTimer,
   type SafetySnapshot,
 } from './safetyDecision.js'
+import { scheduledPowerState } from './lightSchedule.js'
 
 initializeApp()
 const database = getFirestore()
@@ -68,6 +69,40 @@ export const enforceSafetyCutoffs = onSchedule(
 
     await Promise.all(dueDevices.docs.map((device) => enforceCutoff(device.ref, now)))
     logger.info('Safety cutoff scan complete.', { candidates: dueDevices.size })
+  },
+)
+
+export const enforceLightSchedules = onSchedule(
+  { schedule: 'every 1 minutes', region: REGION, timeZone: 'UTC' },
+  async () => {
+    const now = Timestamp.now()
+    const lights = await database.collectionGroup('devices')
+      .where('profile', '==', 'LIGHT')
+      .where('config.schedule.enabled', '==', true)
+      .get()
+
+    await Promise.all(lights.docs.map(async (light) => {
+      const data = light.data()
+      const target = scheduledPowerState(
+        now.toDate(),
+        data.config?.schedule?.startLocalTime as string,
+        data.config?.schedule?.endLocalTime as string,
+        data.config?.schedule?.timezone as string,
+      )
+      if (target == null || data.desired?.status === target) return
+
+      const requestId = `light-schedule-${Math.floor(now.toMillis() / 60_000)}-${target}`
+      await light.ref.update({
+        'desired.status': target,
+        'desired.requestId': requestId,
+        'desired.requestedBy': 'AUTOMATION',
+        'desired.requestedAt': now,
+        commandState: 'PENDING',
+        'config.schedule.lastEvaluatedAt': now,
+        updatedAt: now,
+      })
+    }))
+    logger.info('Light schedule scan complete.', { candidates: lights.size })
   },
 )
 

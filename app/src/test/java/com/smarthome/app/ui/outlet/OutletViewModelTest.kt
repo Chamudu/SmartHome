@@ -246,6 +246,57 @@ class OutletViewModelTest {
     }
 
     @Test
+    fun `valid overnight light schedule is forwarded`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+            repository.emitDevices(listOf(lightDevice()))
+            advanceUntilIdle()
+
+            viewModel.updateLightSchedule(
+                "porch-light", true, "18:00", "06:00", "Asia/Colombo",
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                LightScheduleRequest("porch-light", true, "18:00", "06:00", "Asia/Colombo"),
+                repository.lightScheduleRequest,
+            )
+            assertTrue(viewModel.uiState.value.scheduleUpdatesInFlight.isEmpty())
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `invalid light schedule is rejected before repository call`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+            repository.emitDevices(listOf(lightDevice()))
+            advanceUntilIdle()
+
+            viewModel.updateLightSchedule(
+                "porch-light", true, "25:00", "06:00", "Asia/Colombo",
+            )
+            advanceUntilIdle()
+
+            assertNull(repository.lightScheduleRequest)
+            assertEquals("Use 24-hour time in HH:mm format.", viewModel.uiState.value.errorMessage)
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
     fun `placing outlet infers containing room and forwards logical coordinate`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
@@ -452,6 +503,14 @@ private data class SwitchChannelRequest(
     val powerState: PowerState,
 )
 
+private data class LightScheduleRequest(
+    val deviceId: String,
+    val enabled: Boolean,
+    val startLocalTime: String,
+    val endLocalTime: String,
+    val timezone: String,
+)
+
 private class FakeOutletRepository(
     override var hasAuthenticatedUser: Boolean = false,
 ) : OutletRepository {
@@ -469,6 +528,9 @@ private class FakeOutletRepository(
         private set
 
     var switchChannelRequest: SwitchChannelRequest? = null
+        private set
+
+    var lightScheduleRequest: LightScheduleRequest? = null
         private set
 
     var placement: DevicePlacement? = null
@@ -524,6 +586,19 @@ private class FakeOutletRepository(
         switchChannelRequest = SwitchChannelRequest(deviceId, channelId, powerState)
     }
 
+    override suspend fun updateLightSchedule(
+        homeId: String,
+        deviceId: String,
+        enabled: Boolean,
+        startLocalTime: String,
+        endLocalTime: String,
+        timezone: String,
+    ) {
+        lightScheduleRequest = LightScheduleRequest(
+            deviceId, enabled, startLocalTime, endLocalTime, timezone,
+        )
+    }
+
     override suspend fun placeOutlet(
         homeId: String,
         deviceId: String,
@@ -562,3 +637,17 @@ private class FakeOutletRepository(
         devices.emit(value)
     }
 }
+
+private fun lightDevice() = SmartDevice(
+    id = "porch-light",
+    name = "Porch light",
+    profile = DeviceProfile.LIGHT,
+    floorId = "ground-floor",
+    roomId = "porch",
+    column = 2,
+    row = 2,
+    desiredStatus = PowerState.OFF,
+    reportedStatus = DeviceStatus.OFF,
+    commandState = CommandState.IDLE,
+    configuration = DeviceConfiguration.Light(),
+)

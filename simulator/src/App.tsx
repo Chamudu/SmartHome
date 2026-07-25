@@ -86,7 +86,7 @@ function SimulatorConsole() {
           {['ALL', ...floors].map((floor) => (
             <button key={floor} className={floorFilter === floor ? 'filter-button is-selected' : 'filter-button'}
               type="button" onClick={() => setFloorFilter(floor)}>
-              {floor === 'ALL' ? 'All floors' : floor}
+              {floor === 'ALL' ? 'All floors' : formatIdentifier(floor)}
             </button>
           ))}
           <div className="sidebar-rule" />
@@ -184,7 +184,7 @@ function DeviceCard({ device, busy, busyChannelKeys, onReport, onReportChannel }
           ))}
         </div>
       </div>
-      <footer className="device-footer"><span>{device.floorId} / {device.roomId ?? 'Unassigned room'}</span>
+      <footer className="device-footer"><span>IDs · {device.floorId} / {device.roomId ?? 'unassigned'}</span>
         <span>{busy ? 'Writing state…' : 'Ready'}</span></footer>
     </article>
   )
@@ -192,6 +192,11 @@ function DeviceCard({ device, busy, busyChannelKeys, onReport, onReportChannel }
 
 function formatProfile(profile: DeviceProfile | 'ALL') {
   return profile === 'ALL' ? 'All profiles' : profile.replaceAll('_', ' ')
+}
+
+function formatIdentifier(value: string) {
+  const words = value.replaceAll('-', ' ').replaceAll('_', ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 function profileGlyph(profile: DeviceProfile) {

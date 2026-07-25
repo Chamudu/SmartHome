@@ -24,6 +24,9 @@ sealed interface DeviceConfiguration {
 
     data class Light(
         val scheduleEnabled: Boolean = false,
+        val startLocalTime: String = "18:00",
+        val endLocalTime: String = "22:00",
+        val timezone: String = "Asia/Colombo",
     ) : DeviceConfiguration
 
     data class Camera(

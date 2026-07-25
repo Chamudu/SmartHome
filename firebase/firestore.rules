@@ -120,9 +120,12 @@ service cloud.firestore {
             'enabled', 'startLocalTime', 'endLocalTime', 'timezone', 'lastEvaluatedAt'
           ])
           && data.config.schedule.enabled == false
-          && data.config.schedule.startLocalTime is string
-          && data.config.schedule.endLocalTime is string
+          && validLocalTime(data.config.schedule.startLocalTime)
+          && validLocalTime(data.config.schedule.endLocalTime)
+          && data.config.schedule.startLocalTime != data.config.schedule.endLocalTime
           && data.config.schedule.timezone is string
+          && data.config.schedule.timezone.size() > 0
+          && data.config.schedule.timezone.size() <= 64
           && data.config.schedule.lastEvaluatedAt == null)
         || (data.profile == 'CAMERA'
           && data.config.keys().hasOnly(['mediaType', 'mediaUri', 'capturedAt'])
@@ -282,7 +285,8 @@ service cloud.firestore {
           || simulatorReportedStateUpdate(homeId)
           || ownerOrOperatorPlacementUpdate(homeId)
           || ownerOrOperatorSwitchChannelUpdate(homeId)
-          || simulatorSwitchChannelUpdate(homeId);
+          || simulatorSwitchChannelUpdate(homeId)
+          || ownerOrOperatorLightScheduleUpdate(homeId);
         allow delete: if hasRole(homeId, ['OWNER']);
 
         match /events/{eventId} {
@@ -337,6 +341,33 @@ service cloud.firestore {
           resource.data.config.channels,
           request.resource.data.config.channels
         );
+    }
+
+    function validLocalTime(value) {
+      return value is string
+        && value.matches('(?:[01][0-9]|2[0-3]):[0-5][0-9]');
+    }
+
+    function ownerOrOperatorLightScheduleUpdate(homeId) {
+      return hasRole(homeId, ['OWNER', 'OPERATOR'])
+        && resource.data.profile == 'LIGHT'
+        && request.resource.data.profile == 'LIGHT'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['config', 'updatedAt'])
+        && request.resource.data.config.keys().hasOnly(['schedule'])
+        && request.resource.data.config.schedule.keys().hasOnly([
+          'enabled', 'startLocalTime', 'endLocalTime', 'timezone', 'lastEvaluatedAt'
+        ])
+        && request.resource.data.config.schedule.diff(resource.data.config.schedule)
+          .affectedKeys().hasOnly(['enabled', 'startLocalTime', 'endLocalTime', 'timezone'])
+        && request.resource.data.config.schedule.enabled is bool
+        && validLocalTime(request.resource.data.config.schedule.startLocalTime)
+        && validLocalTime(request.resource.data.config.schedule.endLocalTime)
+        && request.resource.data.config.schedule.startLocalTime
+          != request.resource.data.config.schedule.endLocalTime
+        && request.resource.data.config.schedule.timezone is string
+        && request.resource.data.config.schedule.timezone.size() > 0
+        && request.resource.data.config.schedule.timezone.size() <= 64;
     }
 
     function simulatorSwitchChannelUpdate(homeId) {

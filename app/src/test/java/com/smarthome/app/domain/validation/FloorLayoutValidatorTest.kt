@@ -6,8 +6,17 @@ import com.smarthome.app.domain.model.RoomLayout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.smarthome.app.domain.model.defaultFloorName
 
 class FloorLayoutValidatorTest {
+    @Test
+    fun `floor names are derived from logical levels`() {
+        assertEquals("Basement", defaultFloorName(-1))
+        assertEquals("Ground floor", defaultFloorName(0))
+        assertEquals("First floor", defaultFloorName(1))
+        assertEquals("Second floor", defaultFloorName(2))
+        assertEquals("4th floor", defaultFloorName(4))
+    }
 
     @Test
     fun `valid floor dimensions produce no violations`() {

@@ -1,7 +1,9 @@
 package com.smarthome.app.ui.outlet
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,13 +30,20 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -48,6 +58,7 @@ import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.model.HomeAlert
+import com.smarthome.app.ui.theme.SmartHomeIcons
 
 @Composable
 fun OutletRoute(
@@ -64,6 +75,7 @@ fun OutletRoute(
         onPowerStateRequested = viewModel::requestPowerState,
         onSwitchChannelStateRequested = viewModel::requestSwitchChannelState,
         onDevicePowerStateRequested = viewModel::requestDevicePowerState,
+        onLightScheduleUpdated = viewModel::updateLightSchedule,
         onFloorSelected = viewModel::selectFloor,
         onFloorCreated = viewModel::createFloor,
         onRoomCreated = viewModel::createRoom,
@@ -88,6 +100,7 @@ private fun OutletScreen(
     onPowerStateRequested: (PowerState) -> Unit,
     onSwitchChannelStateRequested: (String, String, PowerState) -> Unit,
     onDevicePowerStateRequested: (String, PowerState) -> Unit,
+    onLightScheduleUpdated: (String, Boolean, String, String, String) -> Unit,
     onFloorSelected: (String) -> Unit,
     onFloorCreated: (String, Int, Int, Int) -> Unit,
     onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
@@ -110,6 +123,7 @@ private fun OutletScreen(
                 onPowerStateRequested = onPowerStateRequested,
                 onSwitchChannelStateRequested = onSwitchChannelStateRequested,
                 onDevicePowerStateRequested = onDevicePowerStateRequested,
+                onLightScheduleUpdated = onLightScheduleUpdated,
                 onFloorSelected = onFloorSelected,
                 onFloorCreated = onFloorCreated,
                 onRoomCreated = onRoomCreated,
@@ -234,6 +248,7 @@ private fun OutletDashboard(
     onPowerStateRequested: (PowerState) -> Unit,
     onSwitchChannelStateRequested: (String, String, PowerState) -> Unit,
     onDevicePowerStateRequested: (String, PowerState) -> Unit,
+    onLightScheduleUpdated: (String, Boolean, String, String, String) -> Unit,
     onFloorSelected: (String) -> Unit,
     onFloorCreated: (String, Int, Int, Int) -> Unit,
     onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
@@ -247,30 +262,61 @@ private fun OutletDashboard(
     onDeviceDeleted: (String) -> Unit,
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var scheduleDevice by remember { mutableStateOf<SmartDevice?>(null) }
+
+    scheduleDevice?.let { device ->
+        LightScheduleDialog(
+            device = device,
+            isSaving = device.id in state.scheduleUpdatesInFlight,
+            onDismiss = { scheduleDevice = null },
+            onSave = { enabled, start, end, timezone ->
+                onLightScheduleUpdated(device.id, enabled, start, end, timezone)
+                scheduleDevice = null
+            },
+        )
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.linearGradient(
+                        listOf(Color(0xFF20A4D5), Color(0xFF087DB7)),
+                    ),
+                    shape = RoundedCornerShape(28.dp),
+                )
+                .padding(20.dp),
         ) {
-            Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(SmartHomeIcons.Home, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.size(12.dp))
+                    Column {
                 Text(
                     text = "Primary home",
                     style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
                 )
                 Text(
                     text = state.selectedFloor?.name ?: "No floor selected",
                     style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.82f),
                 )
-            }
+                    }
+                }
 
-            TextButton(onClick = onSignOut) {
-                Text("Sign out")
+                TextButton(onClick = onSignOut) {
+                    Text("Sign out", color = Color.White)
+                }
             }
         }
 
@@ -281,17 +327,43 @@ private fun OutletDashboard(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
                 text = { Text("Devices") },
+                icon = { Icon(SmartHomeIcons.Devices, contentDescription = null) },
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
                 text = { Text("Layout") },
+                icon = { Icon(SmartHomeIcons.Layout, contentDescription = null) },
             )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
         if (selectedTab == 0) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SummaryTile(
+                label = "Online",
+                value = state.devices.count { it.reportedStatus != DeviceStatus.DISCONNECTED }.toString(),
+                icon = SmartHomeIcons.Devices,
+                modifier = Modifier.weight(1f),
+            )
+            SummaryTile(
+                label = "Active",
+                value = state.devices.count { it.reportedStatus == DeviceStatus.ON }.toString(),
+                icon = SmartHomeIcons.Power,
+                modifier = Modifier.weight(1f),
+            )
+            SummaryTile(
+                label = "Alerts",
+                value = state.alerts.size.toString(),
+                icon = SmartHomeIcons.Warning,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(modifier = Modifier.height(20.dp))
         if (state.isLoadingAlerts || state.alerts.isNotEmpty()) {
             Text(
                 text = "Safety alerts",
@@ -302,7 +374,10 @@ private fun OutletDashboard(
                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
             } else {
                 state.alerts.take(3).forEach { alert ->
-                    AlertCard(alert)
+                    AlertCard(
+                        alert = alert,
+                        deviceName = state.devices.firstOrNull { it.id == alert.deviceId }?.name,
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
             }
@@ -332,12 +407,20 @@ private fun OutletDashboard(
             state.devices.isEmpty() -> Text("No devices yet. Add one from the Layout tab.")
 
             else -> state.devices.forEach { device ->
+                val floorName = state.floors.firstOrNull { it.id == device.floorId }?.name
+                    ?: "Unknown floor"
+                val roomName = state.rooms
+                    .takeIf { device.floorId == state.selectedFloorId }
+                    ?.firstOrNull { it.id == device.roomId }
+                    ?.name
                 DeviceSummaryCard(
                     device = device,
+                    locationLabel = listOfNotNull(floorName, roomName).joinToString(" · "),
                     commandsInFlight = state.switchCommandsInFlight,
                     deviceCommandsInFlight = state.deviceCommandsInFlight,
                     onSwitchChannelStateRequested = onSwitchChannelStateRequested,
                     onDevicePowerStateRequested = onDevicePowerStateRequested,
+                    onEditSchedule = { scheduleDevice = device },
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             }
@@ -373,7 +456,31 @@ private fun OutletDashboard(
 }
 
 @Composable
-private fun AlertCard(alert: HomeAlert) {
+private fun SummaryTile(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(value, style = MaterialTheme.typography.titleLarge)
+            Text(label, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+private fun AlertCard(
+    alert: HomeAlert,
+    deviceName: String?,
+) {
     val containerColor = when (alert.severity) {
         AlertSeverity.CRITICAL -> MaterialTheme.colorScheme.errorContainer
         AlertSeverity.WARNING -> MaterialTheme.colorScheme.tertiaryContainer
@@ -391,7 +498,7 @@ private fun AlertCard(alert: HomeAlert) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(alert.message, style = MaterialTheme.typography.bodyMedium)
             Text(
-                text = "Device: ${alert.deviceId}",
+                text = "Device: ${deviceName ?: "Unknown device"}",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -401,10 +508,12 @@ private fun AlertCard(alert: HomeAlert) {
 @Composable
 private fun DeviceSummaryCard(
     device: SmartDevice,
+    locationLabel: String,
     commandsInFlight: Set<String>,
     deviceCommandsInFlight: Set<String>,
     onSwitchChannelStateRequested: (String, String, PowerState) -> Unit,
     onDevicePowerStateRequested: (String, PowerState) -> Unit,
+    onEditSchedule: () -> Unit,
 ) {
     val containerColor = when (device.reportedStatus) {
         DeviceStatus.ON -> MaterialTheme.colorScheme.primaryContainer
@@ -423,9 +532,17 @@ private fun DeviceSummaryCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(device.name, style = MaterialTheme.typography.titleMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = deviceProfileIcon(device.profile),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.size(10.dp))
+                        Text(device.name, style = MaterialTheme.typography.titleMedium)
+                    }
                     Text(
-                        "${device.profile.displayName} · ${device.roomId ?: "No room"}",
+                        "${device.profile.displayName} · $locationLabel",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -448,7 +565,7 @@ private fun DeviceSummaryCard(
                 is DeviceConfiguration.SafetyOutlet ->
                     "Safety cutoff: ${config.maxOnDurationSeconds / 60} minutes"
                 is DeviceConfiguration.Light -> if (config.scheduleEnabled) {
-                    "Automation enabled"
+                    "Scheduled ${config.startLocalTime}–${config.endLocalTime} · ${config.timezone}"
                 } else {
                     "Manual control · automation not configured"
                 }
@@ -494,6 +611,18 @@ private fun DeviceSummaryCard(
                     )
                 }
             }
+            if (device.profile == DeviceProfile.LIGHT) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onEditSchedule,
+                    enabled = device.id !in deviceCommandsInFlight,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(SmartHomeIcons.Schedule, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Edit schedule")
+                }
+            }
             val multiSwitch = device.configuration as? DeviceConfiguration.MultiSwitch
             multiSwitch?.channels?.forEach { channel ->
                 Spacer(modifier = Modifier.height(12.dp))
@@ -531,6 +660,75 @@ private fun DeviceSummaryCard(
             }
         }
     }
+}
+
+@Composable
+private fun LightScheduleDialog(
+    device: SmartDevice,
+    isSaving: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (Boolean, String, String, String) -> Unit,
+) {
+    val configuration = device.configuration as? DeviceConfiguration.Light ?: return
+    var enabled by rememberSaveable(device.id) { mutableStateOf(configuration.scheduleEnabled) }
+    var start by rememberSaveable(device.id) { mutableStateOf(configuration.startLocalTime) }
+    var end by rememberSaveable(device.id) { mutableStateOf(configuration.endLocalTime) }
+    var timezone by rememberSaveable(device.id) { mutableStateOf(configuration.timezone) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(SmartHomeIcons.Schedule, contentDescription = null) },
+        title = { Text("${device.name} schedule") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Automatic operation")
+                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+                OutlinedTextField(
+                    value = start,
+                    onValueChange = { start = it },
+                    label = { Text("Turn on (HH:mm)") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = end,
+                    onValueChange = { end = it },
+                    label = { Text("Turn off (HH:mm)") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = timezone,
+                    onValueChange = { timezone = it },
+                    label = { Text("Timezone") },
+                    singleLine = true,
+                )
+                Text(
+                    "Schedules may cross midnight, for example 18:00–06:00.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(enabled, start, end, timezone) },
+                enabled = !isSaving,
+            ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+private fun deviceProfileIcon(profile: DeviceProfile): ImageVector = when (profile) {
+    DeviceProfile.OUTLET -> SmartHomeIcons.Power
+    DeviceProfile.MULTI_SWITCH -> SmartHomeIcons.Devices
+    DeviceProfile.SAFETY_OUTLET -> SmartHomeIcons.Safety
+    DeviceProfile.LIGHT -> SmartHomeIcons.Light
+    DeviceProfile.CAMERA -> SmartHomeIcons.Camera
 }
 
 @Composable

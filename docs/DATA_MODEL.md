@@ -199,6 +199,11 @@ CAMERA
   config.capturedAt
 ```
 
+Light schedules use half-open intervals: the start is inclusive and the end is exclusive. If start is
+earlier than end, the active range is within one local day. If start is later, the range crosses
+midnight. Equal start/end values are rejected. The IANA timezone makes the rule independent of the
+phone's clock and timezone; the trusted evaluator records its last evaluation with a server timestamp.
+
 Android represents these alternatives as an exhaustive sealed configuration hierarchy selected by the
 required `profile` discriminator. New client-created devices begin with desired and reported status
 `OFF`, command state `IDLE`, null request correlation, and server-generated timestamps. Creation is one
