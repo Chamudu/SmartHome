@@ -33,7 +33,7 @@ completed items should remain checked for release traceability.
 - [x] Add in-app creation and initial configuration for every supported device profile.
 - [x] Apply a cohesive Material 3 theme and semantic status styling.
 - [ ] Verify 48 dp targets, screen-reader semantics, font scaling, and light/dark themes.
-- [ ] Implement variable-channel switch units.
+- [x] Implement independent control and simulator reporting for variable-channel switch units.
 - [x] Implement initial safety-critical device duration configuration.
 - [x] Implement and locally verify the trusted maximum-duration cutoff.
 - [ ] Implement scheduled light operation with timezone-aware server timestamps.

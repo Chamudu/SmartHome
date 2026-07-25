@@ -11,6 +11,8 @@ import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.HomeAlert
 import com.smarthome.app.domain.model.AlertSeverity
+import com.smarthome.app.domain.model.DeviceConfiguration
+import com.smarthome.app.domain.model.SwitchChannel
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.OutletRepository
 import kotlinx.coroutines.Dispatchers
@@ -152,6 +154,52 @@ class OutletViewModelTest {
 
             assertNull(repository.requestedPowerState)
 
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `multi-switch command targets one channel`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+            repository.emitDevices(
+                listOf(
+                    SmartDevice(
+                        id = "hall-switch",
+                        name = "Hall switch",
+                        profile = DeviceProfile.MULTI_SWITCH,
+                        floorId = "ground-floor",
+                        roomId = "hall",
+                        column = 1,
+                        row = 1,
+                        desiredStatus = PowerState.OFF,
+                        reportedStatus = DeviceStatus.OFF,
+                        commandState = CommandState.IDLE,
+                        configuration = DeviceConfiguration.MultiSwitch(
+                            channels = listOf(
+                                SwitchChannel("channel-1", "Lamp", PowerState.OFF, DeviceStatus.OFF, null),
+                                SwitchChannel("channel-2", "Fan", PowerState.OFF, DeviceStatus.OFF, null),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            viewModel.requestSwitchChannelState("hall-switch", "channel-2", PowerState.ON)
+            advanceUntilIdle()
+
+            assertEquals(
+                SwitchChannelRequest("hall-switch", "channel-2", PowerState.ON),
+                repository.switchChannelRequest,
+            )
+            assertTrue(viewModel.uiState.value.switchCommandsInFlight.isEmpty())
             viewModel.signOut()
         } finally {
             Dispatchers.resetMain()
@@ -359,6 +407,12 @@ private data class DevicePlacement(
     val row: Int,
 )
 
+private data class SwitchChannelRequest(
+    val deviceId: String,
+    val channelId: String,
+    val powerState: PowerState,
+)
+
 private class FakeOutletRepository(
     override var hasAuthenticatedUser: Boolean = false,
 ) : OutletRepository {
@@ -370,6 +424,9 @@ private class FakeOutletRepository(
         private set
 
     var requestedPowerState: PowerState? = null
+        private set
+
+    var switchChannelRequest: SwitchChannelRequest? = null
         private set
 
     var placement: DevicePlacement? = null
@@ -415,6 +472,15 @@ private class FakeOutletRepository(
         requestedPowerState = powerState
     }
 
+    override suspend fun requestSwitchChannelState(
+        homeId: String,
+        deviceId: String,
+        channelId: String,
+        powerState: PowerState,
+    ) {
+        switchChannelRequest = SwitchChannelRequest(deviceId, channelId, powerState)
+    }
+
     override suspend fun placeOutlet(
         homeId: String,
         deviceId: String,
@@ -447,5 +513,9 @@ private class FakeOutletRepository(
 
     suspend fun emitAlerts(value: List<HomeAlert>) {
         alerts.emit(value)
+    }
+
+    suspend fun emitDevices(value: List<SmartDevice>) {
+        devices.emit(value)
     }
 }

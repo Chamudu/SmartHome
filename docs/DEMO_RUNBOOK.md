@@ -31,8 +31,10 @@ screenshots or recordings.
 8. Long-press a cell to prefill Add Device; create a profile and show it appear reactively in both clients.
 9. Attempt an invalid four-channel switch or unsafe camera URI to show validation.
 10. Filter devices and report error/disconnection independently from the simulator.
-11. Briefly show emulator-backed rule tests as evidence that direct APIs cannot bypass authorization.
-12. With deployed functions, turn on a short-duration safety outlet and show automatic `OFF`, its event,
+11. Toggle two different channels in Android; show each channel acknowledge independently in the
+    simulator, then simulate a channel error without changing the other channel.
+12. Briefly show emulator-backed rule tests as evidence that direct APIs cannot bypass authorization.
+13. With deployed functions, turn on a short-duration safety outlet and show automatic `OFF`, its event,
     and the persistent critical alert in Android. Allow for the scheduler's one-minute scan interval.
 
 ## Planned final walkthrough additions

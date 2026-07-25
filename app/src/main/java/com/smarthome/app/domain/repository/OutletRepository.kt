@@ -37,6 +37,13 @@ interface OutletRepository {
         powerState: PowerState,
     )
 
+    suspend fun requestSwitchChannelState(
+        homeId: String,
+        deviceId: String,
+        channelId: String,
+        powerState: PowerState,
+    )
+
     suspend fun placeOutlet(
         homeId: String,
         deviceId: String,

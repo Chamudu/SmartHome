@@ -43,6 +43,10 @@ npm --prefix functions run check
 - Safety timer start/clear transitions, duration bounds, exact due-time boundary, and retry behavior.
 - Active members can read trusted alerts while owner and simulator clients cannot forge them.
 - A ViewModel repository stream exposes backend-created alerts to reactive Android UI state.
+- A multi-switch ViewModel command addresses the requested device/channel only.
+- Owner channel requests cannot forge reported state; simulator reports cannot change desired state.
+- A channel write preserves every unrelated channel, and transactional clients re-read before updating
+  the embedded array.
 
 ## Manual acceptance focus
 

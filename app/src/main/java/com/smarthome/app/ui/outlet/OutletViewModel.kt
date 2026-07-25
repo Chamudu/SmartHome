@@ -7,6 +7,7 @@ import com.smarthome.app.data.FirebaseOutletRepository
 import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.LayoutViolation
 import com.smarthome.app.domain.model.DeviceProfile
+import com.smarthome.app.domain.model.DeviceConfiguration
 import com.smarthome.app.domain.model.NewDevice
 import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
@@ -37,6 +38,7 @@ data class OutletUiState(
     val devices: List<SmartDevice> = emptyList(),
     val isLoadingDevices: Boolean = false,
     val isCreatingDevice: Boolean = false,
+    val switchCommandsInFlight: Set<String> = emptySet(),
     val alerts: List<HomeAlert> = emptyList(),
     val isLoadingAlerts: Boolean = false,
     val errorMessage: String? = null,
@@ -178,6 +180,44 @@ class OutletViewModel(
                     it.copy(
                         isSendingCommand = false,
                         errorMessage = "The outlet command could not be sent.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun requestSwitchChannelState(
+        deviceId: String,
+        channelId: String,
+        powerState: PowerState,
+    ) {
+        val key = "$deviceId:$channelId"
+        val device = mutableUiState.value.devices.firstOrNull { it.id == deviceId }
+        val configuration = device?.configuration as? DeviceConfiguration.MultiSwitch
+        val channel = configuration?.channels?.firstOrNull { it.id == channelId }
+        if (device == null || channel == null ||
+            !device.reportedStatus.acceptsPowerCommands ||
+            key in mutableUiState.value.switchCommandsInFlight
+        ) return
+
+        viewModelScope.launch {
+            mutableUiState.update {
+                it.copy(
+                    switchCommandsInFlight = it.switchCommandsInFlight + key,
+                    errorMessage = null,
+                )
+            }
+            runCatching {
+                repository.requestSwitchChannelState(HOME_ID, deviceId, channelId, powerState)
+            }.onSuccess {
+                mutableUiState.update {
+                    it.copy(switchCommandsInFlight = it.switchCommandsInFlight - key)
+                }
+            }.onFailure {
+                mutableUiState.update {
+                    it.copy(
+                        switchCommandsInFlight = it.switchCommandsInFlight - key,
+                        errorMessage = "The switch channel command could not be sent.",
                     )
                 }
             }

@@ -114,7 +114,10 @@ function SimulatorConsole() {
               {visibleDevices.map((device) => (
                 <DeviceCard key={device.id} device={device}
                   busy={simulator.busyDeviceIds.has(device.id)}
-                  onReport={(status) => void simulator.reportStatus(device.id, status)} />
+                  busyChannelKeys={simulator.busyChannelKeys}
+                  onReport={(status) => void simulator.reportStatus(device.id, status)}
+                  onReportChannel={(channelId, status) =>
+                    void simulator.reportChannelStatus(device.id, channelId, status)} />
               ))}
             </div>
           )}
@@ -124,12 +127,17 @@ function SimulatorConsole() {
   )
 }
 
-function DeviceCard({ device, busy, onReport }: {
+function DeviceCard({ device, busy, busyChannelKeys, onReport, onReportChannel }: {
   device: DeviceTwin
   busy: boolean
+  busyChannelKeys: ReadonlySet<string>
   onReport: (status: DeviceStatus) => void
+  onReportChannel: (channelId: string, status: DeviceStatus) => void
 }) {
   const pending = device.desired.requestId !== null && device.desired.requestId !== device.reported.requestId
+  const channels = device.profile === 'MULTI_SWITCH' && 'channels' in device.config
+    ? device.config.channels
+    : []
   return (
     <article className="device-card">
       <div className="device-identity">
@@ -144,6 +152,28 @@ function DeviceCard({ device, busy, onReport }: {
         <div><dt>Position</dt><dd>{device.position.column}, {device.position.row}</dd></div>
       </dl>
       <p className="config-summary">{configurationSummary(device.profile, device.config)}</p>
+      {channels.map((channel) => {
+        const channelBusy = busyChannelKeys.has(`${device.id}:${channel.id}`)
+        const channelPending = (channel.reportedStatus === 'ON' || channel.reportedStatus === 'OFF') &&
+          channel.desiredStatus !== channel.reportedStatus
+        return (
+          <div className="control-panel" key={channel.id}>
+            <div>
+              <p className="control-title">{channel.name}</p>
+              <p className="muted">Desired {channel.desiredStatus} · Reported {channel.reportedStatus}
+                {channelPending ? ' · PENDING' : ''}</p>
+            </div>
+            <div className="button-row">
+              {statusOptions.map((status) => (
+                <button key={status}
+                  className={channel.reportedStatus === status ? 'state-button is-selected' : 'state-button'}
+                  type="button" disabled={channelBusy}
+                  onClick={() => onReportChannel(channel.id, status)}>{status}</button>
+              ))}
+            </div>
+          </div>
+        )
+      })}
       <div className="control-panel">
         <div><p className="control-title">Report physical state</p>
           <p className="muted">Writes only simulator-authorized reported fields.</p></div>

@@ -209,8 +209,10 @@ Rules validate floor/room containment and the complete profile shape; strict coo
 across simultaneous creators would require a deterministic coordinate index or trusted transaction.
 
 Multi-switch channel state is embedded because channel count is small and the unit is normally read as
-one entity. Channel array updates must use a transaction to prevent one concurrent channel update from
-overwriting another.
+one entity. `desiredStatus` is owner/operator intent, `reportedStatus` is simulator-confirmed truth, and
+`requestId` identifies the latest desired channel command. Channel array updates use transactions to
+prevent one concurrent channel update from overwriting another. Rules use per-map `diff` checks: an
+owner may change only desired state plus request ID, while a simulator may change only reported state.
 
 ### `homes/{homeId}/devices/{deviceId}/events/{eventId}`
 

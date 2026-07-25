@@ -20,7 +20,7 @@ Compose event
 | `MainActivity.kt` | Android entry point and root theme/application composition |
 | `DeviceStatus.kt` | Operational status and whether normal power commands are safe |
 | `OutletDevice.kt` | Proven outlet twin, power state, command state, and pending/control derivations |
-| `SmartDevice.kt` | Shared profile discriminator, sealed configuration, device view, and creation request |
+| `SmartDevice.kt` | Shared profile discriminator, sealed configuration, per-channel switch twin, and creation request |
 | `HomeAlert.kt` | Persistent alert identity, severity, message, related device, and trusted timestamp |
 | `FloorPlan.kt` | Floor, half-open room rectangles, computed edges, and validation violations |
 | `FloorLayoutValidator.kt` | Pure floor, room, overlap, and device-coordinate validation |
@@ -39,7 +39,7 @@ Compose event
 | --- | --- |
 | `firebase.ts` | Reads local Vite environment configuration and initializes Auth/Firestore |
 | `types.ts` | TypeScript twin/status contract for the current outlet |
-| `useDeviceSimulator.ts` | Auth lifecycle, device-collection listener, per-device acknowledgement, and hardware reports |
+| `useDeviceSimulator.ts` | Auth lifecycle, device listener, transactional device/channel acknowledgement, and reports |
 | `App.tsx` | Configuration, sign-in, filters, multi-device telemetry, and simulator controls |
 | `App.css` / `index.css` | Responsive diagnostic-console presentation and global styling |
 | `scripts/seed-demo.mjs` | Authenticated, idempotent demo-floor/room/device creation |

@@ -56,6 +56,7 @@ fun OutletRoute(
         onSignIn = viewModel::signIn,
         onSignOut = viewModel::signOut,
         onPowerStateRequested = viewModel::requestPowerState,
+        onSwitchChannelStateRequested = viewModel::requestSwitchChannelState,
         onFloorSelected = viewModel::selectFloor,
         onFloorCreated = viewModel::createFloor,
         onRoomCreated = viewModel::createRoom,
@@ -78,6 +79,7 @@ private fun OutletScreen(
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onPowerStateRequested: (PowerState) -> Unit,
+    onSwitchChannelStateRequested: (String, String, PowerState) -> Unit,
     onFloorSelected: (String) -> Unit,
     onFloorCreated: (String, Int, Int, Int) -> Unit,
     onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
@@ -98,6 +100,7 @@ private fun OutletScreen(
                 state = state,
                 onSignOut = onSignOut,
                 onPowerStateRequested = onPowerStateRequested,
+                onSwitchChannelStateRequested = onSwitchChannelStateRequested,
                 onFloorSelected = onFloorSelected,
                 onFloorCreated = onFloorCreated,
                 onRoomCreated = onRoomCreated,
@@ -220,6 +223,7 @@ private fun OutletDashboard(
     state: OutletUiState,
     onSignOut: () -> Unit,
     onPowerStateRequested: (PowerState) -> Unit,
+    onSwitchChannelStateRequested: (String, String, PowerState) -> Unit,
     onFloorSelected: (String) -> Unit,
     onFloorCreated: (String, Int, Int, Int) -> Unit,
     onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
@@ -312,7 +316,11 @@ private fun OutletDashboard(
             state.devices.isEmpty() -> Text("No devices are configured on this home.")
 
             else -> state.devices.forEach { device ->
-                DeviceSummaryCard(device)
+                DeviceSummaryCard(
+                    device = device,
+                    commandsInFlight = state.switchCommandsInFlight,
+                    onSwitchChannelStateRequested = onSwitchChannelStateRequested,
+                )
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }
@@ -367,7 +375,11 @@ private fun AlertCard(alert: HomeAlert) {
 }
 
 @Composable
-private fun DeviceSummaryCard(device: SmartDevice) {
+private fun DeviceSummaryCard(
+    device: SmartDevice,
+    commandsInFlight: Set<String>,
+    onSwitchChannelStateRequested: (String, String, PowerState) -> Unit,
+) {
     val containerColor = when (device.reportedStatus) {
         DeviceStatus.ON -> MaterialTheme.colorScheme.primaryContainer
         DeviceStatus.OFF -> MaterialTheme.colorScheme.surfaceVariant
@@ -402,6 +414,43 @@ private fun DeviceSummaryCard(device: SmartDevice) {
                 is DeviceConfiguration.Camera -> "Mock camera media configured"
             }
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            val multiSwitch = device.configuration as? DeviceConfiguration.MultiSwitch
+            multiSwitch?.channels?.forEach { channel ->
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(channel.name, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (channel.isPending) {
+                                "${channel.reportedStatus.name} → ${channel.desiredStatus.name} · PENDING"
+                            } else {
+                                channel.reportedStatus.name
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    val key = "${device.id}:${channel.id}"
+                    Button(
+                        onClick = {
+                            val target = if (channel.desiredStatus == PowerState.ON) {
+                                PowerState.OFF
+                            } else {
+                                PowerState.ON
+                            }
+                            onSwitchChannelStateRequested(device.id, channel.id, target)
+                        },
+                        enabled = key !in commandsInFlight && device.reportedStatus.acceptsPowerCommands,
+                    ) {
+                        Text(if (channel.desiredStatus == PowerState.ON) "Turn off" else "Turn on")
+                    }
+                }
+            }
         }
     }
 }

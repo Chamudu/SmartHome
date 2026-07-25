@@ -17,6 +17,7 @@ import {
   beforeAll,
   beforeEach,
   describe,
+  expect,
   it,
 } from 'vitest'
 
@@ -133,6 +134,25 @@ beforeEach(async () => {
         errorCode: null,
       },
       commandState: 'IDLE',
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    await setDoc(doc(database, 'homes', HOME_ID, 'devices', 'configured-switch'), {
+      name: 'Hall switch',
+      profile: 'MULTI_SWITCH',
+      floorId: 'ground-floor',
+      roomId: 'utility',
+      position: { row: 2, column: 2 },
+      desired: { status: 'OFF', requestId: null, requestedBy: null, requestedAt: null },
+      reported: { status: 'OFF', requestId: null, updatedAt: now, errorCode: null },
+      commandState: 'IDLE',
+      config: {
+        channels: [
+          { id: 'channel-1', name: 'Lamp', desiredStatus: 'OFF', reportedStatus: 'OFF', requestId: null },
+          { id: 'channel-2', name: 'Fan', desiredStatus: 'OFF', reportedStatus: 'OFF', requestId: null },
+        ],
+      },
       createdAt: now,
       updatedAt: now,
     })
@@ -298,6 +318,63 @@ describe('safety alert authorization', () => {
 
     await assertFails(updateDoc(doc(database, ...alertPath), {
       [`readBy.${SIMULATOR_UID}`]: new Date(),
+    }))
+  })
+})
+
+describe('multi-switch channel authorization', () => {
+  const switchPath = ['homes', HOME_ID, 'devices', 'configured-switch'] as const
+  const requestedChannels = [
+    { id: 'channel-1', name: 'Lamp', desiredStatus: 'ON', reportedStatus: 'OFF', requestId: 'channel-request-1' },
+    { id: 'channel-2', name: 'Fan', desiredStatus: 'OFF', reportedStatus: 'OFF', requestId: null },
+  ]
+
+  it('allows an owner to request one channel without changing another', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    const reference = doc(database, ...switchPath)
+
+    await assertSucceeds(updateDoc(reference, {
+      'config.channels': requestedChannels,
+      updatedAt: new Date(),
+    }))
+    const stored = (await getDoc(reference)).data()?.config.channels
+    expect(stored[1].desiredStatus).toBe('OFF')
+    expect(stored[1].requestId).toBeNull()
+  })
+
+  it('allows the simulator to acknowledge only reported channel state', async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), ...switchPath), {
+        'config.channels': requestedChannels,
+      })
+    })
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+    const acknowledged = requestedChannels.map((channel, index) =>
+      index === 0 ? { ...channel, reportedStatus: 'ON' } : channel)
+
+    await assertSucceeds(updateDoc(doc(database, ...switchPath), {
+      'config.channels': acknowledged,
+      updatedAt: new Date(),
+    }))
+  })
+
+  it('denies an owner forging a channel reported state', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    const forged = requestedChannels.map((channel, index) =>
+      index === 0 ? { ...channel, reportedStatus: 'ON' } : channel)
+
+    await assertFails(updateDoc(doc(database, ...switchPath), {
+      'config.channels': forged,
+      updatedAt: new Date(),
+    }))
+  })
+
+  it('denies the simulator changing a channel desired state', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(updateDoc(doc(database, ...switchPath), {
+      'config.channels': requestedChannels,
+      updatedAt: new Date(),
     }))
   })
 })

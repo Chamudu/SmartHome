@@ -9,6 +9,7 @@ import {
   collection,
   doc,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore'
@@ -20,6 +21,7 @@ export function useDeviceSimulator() {
   const [devices, setDevices] = useState<DeviceTwin[]>([])
   const [listenerConnected, setListenerConnected] = useState(false)
   const [busyDeviceIds, setBusyDeviceIds] = useState<ReadonlySet<string>>(new Set())
+  const [busyChannelKeys, setBusyChannelKeys] = useState<ReadonlySet<string>>(new Set())
   const [authBusy, setAuthBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const acknowledgements = useRef(new Set<string>())
@@ -72,6 +74,21 @@ export function useDeviceSimulator() {
               setError(toMessage(cause))
             })
           }
+
+
+          const channels = device.profile === 'MULTI_SWITCH' && 'channels' in device.config
+            ? device.config.channels
+            : []
+          channels.forEach((channel) => {
+            if (channel.requestId === null || channel.desiredStatus === channel.reportedStatus) return
+            const channelKey = `${device.id}:${channel.id}:${channel.requestId}`
+            if (acknowledgements.current.has(channelKey)) return
+            acknowledgements.current.add(channelKey)
+            void acknowledgeSwitchChannel(device.id, channel.id, channel.requestId).catch((cause: unknown) => {
+              acknowledgements.current.delete(channelKey)
+              setError(toMessage(cause))
+            })
+          })
         })
       },
       (cause) => {
@@ -126,17 +143,75 @@ export function useDeviceSimulator() {
     }
   }, [])
 
+  const reportChannelStatus = useCallback(async (
+    deviceId: string,
+    channelId: string,
+    status: DeviceStatus,
+  ) => {
+    if (!db || !homeId) return
+    const key = `${deviceId}:${channelId}`
+    setBusyChannelKeys((current) => new Set(current).add(key))
+    setError(null)
+    try {
+      await runTransaction(db, async (transaction) => {
+        const reference = doc(db!, 'homes', homeId!, 'devices', deviceId)
+        const snapshot = await transaction.get(reference)
+        const device = snapshot.data() as DeviceTwin | undefined
+        if (!device || device.profile !== 'MULTI_SWITCH' || !('channels' in device.config)) {
+          throw new Error('Multi-switch channels are unavailable.')
+        }
+        const channels = device.config.channels.map((channel) =>
+          channel.id === channelId ? { ...channel, reportedStatus: status } : channel)
+        if (!channels.some((channel) => channel.id === channelId)) {
+          throw new Error('Switch channel does not exist.')
+        }
+        transaction.update(reference, { 'config.channels': channels, updatedAt: serverTimestamp() })
+      })
+    } catch (cause) {
+      setError(toMessage(cause))
+    } finally {
+      setBusyChannelKeys((current) => {
+        const next = new Set(current)
+        next.delete(key)
+        return next
+      })
+    }
+  }, [])
+
   return {
     user,
     devices,
     listenerConnected,
     busyDeviceIds,
+    busyChannelKeys,
     authBusy,
     error,
     signIn,
     signOut,
     reportStatus,
+    reportChannelStatus,
   }
+}
+
+async function acknowledgeSwitchChannel(
+  deviceId: string,
+  channelId: string,
+  requestId: string,
+): Promise<void> {
+  if (!db || !homeId) return
+  await runTransaction(db, async (transaction) => {
+    const reference = doc(db!, 'homes', homeId!, 'devices', deviceId)
+    const snapshot = await transaction.get(reference)
+    const device = snapshot.data() as DeviceTwin | undefined
+    if (!device || device.profile !== 'MULTI_SWITCH' || !('channels' in device.config)) return
+    const current = device.config.channels.find((channel) => channel.id === channelId)
+    if (!current || current.requestId !== requestId) return
+    const channels = device.config.channels.map((channel) =>
+      channel.id === channelId
+        ? { ...channel, reportedStatus: channel.desiredStatus }
+        : channel)
+    transaction.update(reference, { 'config.channels': channels, updatedAt: serverTimestamp() })
+  })
 }
 
 function toMessage(cause: unknown): string {

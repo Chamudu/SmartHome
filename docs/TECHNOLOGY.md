@@ -51,5 +51,7 @@
   registrations through `awaitClose`.
 - **Atomicity and idempotency:** document writes initialize complete state; request IDs prepare commands
   for safe correlation and retry handling.
+- **Optimistic transactions:** channel-array writers re-read and retry on conflict, preventing unrelated
+  channel updates from being lost.
 - **Trusted time and at-least-once delivery:** server timestamps establish deadlines; transactions and
   deterministic event IDs make repeated function execution safe.

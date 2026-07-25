@@ -25,14 +25,16 @@ Status date: 2026-07-25
 - Node 22/TypeScript second-generation Cloud Functions that start safety timers and enforce due cutoffs.
 - Idempotent cutoff transactions that update device state and create one event plus one persistent alert.
 - Real-time safety-alert observation and critical alert cards in Android.
+- Independent two-, three-, and five-channel switch controls with transactional Android requests and
+  simulator acknowledgements/manual reports.
 
 ## Current verification evidence
 
 | Layer | Evidence |
 | --- | --- |
-| Android domain/ViewModel | 19 passing JUnit tests |
+| Android domain/ViewModel | 22 passing JUnit tests |
 | Android packaging | `:app:assembleDebug` succeeds |
-| Firestore authorization/schema | 26 passing emulator-backed Vitest tests |
+| Firestore authorization/schema | 30 passing emulator-backed Vitest tests |
 | Cloud Functions | TypeScript build and 5 Vitest state-machine tests pass |
 | Simulator | TypeScript typecheck, Oxlint, and Vite production build succeed |
 | Cloud rules | Tested rules deployed successfully to the development Firebase project |
@@ -46,7 +48,6 @@ Status date: 2026-07-25
 ## Not implemented yet
 
 - Touch resize/move for existing rooms; device movement currently uses a coordinate form after tapping.
-- Per-channel multi-switch commands.
 - Editing an existing safety duration and production deployment of the verified cutoff functions.
 - Scheduled light execution.
 - Camera snapshot rendering/upload and optional second-phone camera node.

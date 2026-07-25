@@ -12,6 +12,7 @@ import com.smarthome.app.domain.model.DeviceConfiguration
 import com.smarthome.app.domain.model.DeviceProfile
 import com.smarthome.app.domain.model.NewDevice
 import com.smarthome.app.domain.model.SmartDevice
+import com.smarthome.app.domain.model.SwitchChannel
 import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.model.HomeAlert
 import com.smarthome.app.domain.repository.OutletRepository
@@ -192,6 +193,41 @@ class FirebaseOutletRepository(
             .await()
     }
 
+    override suspend fun requestSwitchChannelState(
+        homeId: String,
+        deviceId: String,
+        channelId: String,
+        powerState: PowerState,
+    ) {
+        check(authentication.currentUser != null) { "Authentication is required." }
+        val reference = outletDocument(homeId, deviceId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(reference)
+            check(snapshot.getString("profile") == DeviceProfile.MULTI_SWITCH.name) {
+                "Device is not a multi-switch."
+            }
+            val channels = (snapshot.get("config.channels") as? List<*>)
+                ?.map { raw ->
+                    (raw as? Map<*, *>)?.entries?.associate { (key, value) -> key.toString() to value }
+                        ?: error("Invalid switch channel.")
+                }
+                ?: error("Switch channels are missing.")
+            check(channels.any { channel -> channel["id"] == channelId }) {
+                "Switch channel does not exist."
+            }
+            val nextChannels = channels.map { channel ->
+                if (channel["id"] != channelId) channel else channel + mapOf(
+                    "desiredStatus" to powerState.name,
+                    "requestId" to UUID.randomUUID().toString(),
+                )
+            }
+            transaction.update(reference, mapOf(
+                "config.channels" to nextChannels,
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+        }.await()
+    }
+
     override suspend fun placeOutlet(
         homeId: String,
         deviceId: String,
@@ -247,8 +283,19 @@ private fun DocumentSnapshot.toSmartDevice(): SmartDevice {
     val configuration = when (profile) {
         DeviceProfile.OUTLET -> DeviceConfiguration.Outlet
         DeviceProfile.MULTI_SWITCH -> DeviceConfiguration.MultiSwitch(
-            channelCount = (config["channels"] as? List<*>)?.size
-                ?: throw IllegalStateException("Switch channels are missing."),
+            channels = (config["channels"] as? List<*>)?.map { rawChannel ->
+                val channel = rawChannel as? Map<*, *>
+                    ?: throw IllegalStateException("Invalid switch channel.")
+                SwitchChannel(
+                    id = channel["id"] as? String
+                        ?: throw IllegalStateException("Switch channel ID is missing."),
+                    name = channel["name"] as? String
+                        ?: throw IllegalStateException("Switch channel name is missing."),
+                    desiredStatus = parsePowerState(channel["desiredStatus"] as? String),
+                    reportedStatus = parseDeviceStatus(channel["reportedStatus"] as? String),
+                    requestId = channel["requestId"] as? String,
+                )
+            } ?: throw IllegalStateException("Switch channels are missing."),
         )
         DeviceProfile.SAFETY_OUTLET -> DeviceConfiguration.SafetyOutlet(
             maxOnDurationSeconds = config.requiredInt("maxOnDurationSeconds"),

@@ -12,8 +12,11 @@ sealed interface DeviceConfiguration {
     data object Outlet : DeviceConfiguration
 
     data class MultiSwitch(
-        val channelCount: Int,
-    ) : DeviceConfiguration
+        val channels: List<SwitchChannel>,
+    ) : DeviceConfiguration {
+        val channelCount: Int
+            get() = channels.size
+    }
 
     data class SafetyOutlet(
         val maxOnDurationSeconds: Int,
@@ -26,6 +29,17 @@ sealed interface DeviceConfiguration {
     data class Camera(
         val mediaUri: String,
     ) : DeviceConfiguration
+}
+
+data class SwitchChannel(
+    val id: String,
+    val name: String,
+    val desiredStatus: PowerState,
+    val reportedStatus: DeviceStatus,
+    val requestId: String?,
+) {
+    val isPending: Boolean
+        get() = reportedStatus.acceptsPowerCommands && desiredStatus.name != reportedStatus.name
 }
 
 data class SmartDevice(
