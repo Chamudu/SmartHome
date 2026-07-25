@@ -29,7 +29,7 @@ Compose event
 | `FirebaseOutletRepository.kt` | Firebase Auth, device/alert listeners, mapping, creation, commands, and placement |
 | `FirebaseFloorRepository.kt` | Floor/room listeners, mapping, writes, deletion reference checks, and batch cascade |
 | `OutletViewModel.kt` | Screen state, listener lifecycle, validation, selection, and user-action orchestration |
-| `OutletScreen.kt` | Authentication, dashboard, device summaries, outlet controls, and status presentation |
+| `OutletScreen.kt` | Authentication, Devices/Layout navigation, profile controls, and status explanations |
 | `FloorDashboardSection.kt` | Floor selector/grid, gestures, previews, CRUD dialogs, and Add Device form |
 | `Theme.kt` | Branded light/dark Material 3 color schemes |
 

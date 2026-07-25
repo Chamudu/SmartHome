@@ -44,6 +44,7 @@ npm --prefix functions run check
 - Active members can read trusted alerts while owner and simulator clients cannot forge them.
 - A ViewModel repository stream exposes backend-created alerts to reactive Android UI state.
 - A multi-switch ViewModel command addresses the requested device/channel only.
+- A generic light/outlet command routes to the selected device rather than the legacy primary outlet.
 - Owner channel requests cannot forge reported state; simulator reports cannot change desired state.
 - A channel write preserves every unrelated channel, and transactional clients re-read before updating
   the embedded array.

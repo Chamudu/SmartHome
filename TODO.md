@@ -32,6 +32,7 @@ completed items should remain checked for release traceability.
 - [ ] Add a touch-first floor editor with drag selection and visible accessible alternatives.
 - [x] Add in-app creation and initial configuration for every supported device profile.
 - [x] Apply a cohesive Material 3 theme and semantic status styling.
+- [x] Separate daily device control from floor editing with task-focused dashboard tabs.
 - [ ] Verify 48 dp targets, screen-reader semantics, font scaling, and light/dark themes.
 - [x] Implement independent control and simulator reporting for variable-channel switch units.
 - [x] Implement initial safety-critical device duration configuration.

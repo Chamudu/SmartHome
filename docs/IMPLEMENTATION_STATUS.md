@@ -27,12 +27,14 @@ Status date: 2026-07-25
 - Real-time safety-alert observation and critical alert cards in Android.
 - Independent two-, three-, and five-channel switch controls with transactional Android requests and
   simulator acknowledgements/manual reports.
+- Task-focused Devices/Layout tabs and direct power switches for outlet, safety-outlet, and light cards.
+- Explicit pending/error/disconnected explanations and clearer wording for unconfigured light automation.
 
 ## Current verification evidence
 
 | Layer | Evidence |
 | --- | --- |
-| Android domain/ViewModel | 22 passing JUnit tests |
+| Android domain/ViewModel | 23 passing JUnit tests |
 | Android packaging | `:app:assembleDebug` succeeds |
 | Firestore authorization/schema | 30 passing emulator-backed Vitest tests |
 | Cloud Functions | TypeScript build and 5 Vitest state-machine tests pass |

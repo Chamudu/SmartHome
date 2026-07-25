@@ -12,6 +12,13 @@ The Android application uses a single-activity Compose architecture. Top-level d
 Device details and floor editing are contextual destinations reached from Home or Settings rather than
 permanent navigation items.
 
+The current authenticated dashboard introduces two task-focused tabs as an incremental navigation step:
+
+- **Devices** — alerts, confirmed status, pending feedback, and direct power/channel controls.
+- **Layout** — floor selection, grid editing, rooms, placement, and device creation.
+
+This keeps frequent monitoring actions visible without mixing them into the longer administration flow.
+
 ## Primary user flows
 
 ### Monitor and control a device

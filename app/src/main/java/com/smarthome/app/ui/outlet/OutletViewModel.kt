@@ -8,6 +8,7 @@ import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.LayoutViolation
 import com.smarthome.app.domain.model.DeviceProfile
 import com.smarthome.app.domain.model.DeviceConfiguration
+import com.smarthome.app.domain.model.CommandState
 import com.smarthome.app.domain.model.NewDevice
 import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
@@ -39,6 +40,7 @@ data class OutletUiState(
     val isLoadingDevices: Boolean = false,
     val isCreatingDevice: Boolean = false,
     val switchCommandsInFlight: Set<String> = emptySet(),
+    val deviceCommandsInFlight: Set<String> = emptySet(),
     val alerts: List<HomeAlert> = emptyList(),
     val isLoadingAlerts: Boolean = false,
     val errorMessage: String? = null,
@@ -218,6 +220,46 @@ class OutletViewModel(
                     it.copy(
                         switchCommandsInFlight = it.switchCommandsInFlight - key,
                         errorMessage = "The switch channel command could not be sent.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun requestDevicePowerState(
+        deviceId: String,
+        powerState: PowerState,
+    ) {
+        val state = mutableUiState.value
+        val device = state.devices.firstOrNull { it.id == deviceId } ?: return
+        val supportsPower = device.profile in setOf(
+            DeviceProfile.OUTLET,
+            DeviceProfile.SAFETY_OUTLET,
+            DeviceProfile.LIGHT,
+        )
+        if (!supportsPower || !device.reportedStatus.acceptsPowerCommands ||
+            device.commandState == CommandState.PENDING ||
+            deviceId in state.deviceCommandsInFlight
+        ) return
+
+        viewModelScope.launch {
+            mutableUiState.update {
+                it.copy(
+                    deviceCommandsInFlight = it.deviceCommandsInFlight + deviceId,
+                    errorMessage = null,
+                )
+            }
+            runCatching {
+                repository.requestPowerState(HOME_ID, deviceId, powerState)
+            }.onSuccess {
+                mutableUiState.update {
+                    it.copy(deviceCommandsInFlight = it.deviceCommandsInFlight - deviceId)
+                }
+            }.onFailure {
+                mutableUiState.update {
+                    it.copy(
+                        deviceCommandsInFlight = it.deviceCommandsInFlight - deviceId,
+                        errorMessage = "The device command could not be sent.",
                     )
                 }
             }

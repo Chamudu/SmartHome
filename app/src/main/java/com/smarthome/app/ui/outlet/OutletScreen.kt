@@ -22,10 +22,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
@@ -57,6 +63,7 @@ fun OutletRoute(
         onSignOut = viewModel::signOut,
         onPowerStateRequested = viewModel::requestPowerState,
         onSwitchChannelStateRequested = viewModel::requestSwitchChannelState,
+        onDevicePowerStateRequested = viewModel::requestDevicePowerState,
         onFloorSelected = viewModel::selectFloor,
         onFloorCreated = viewModel::createFloor,
         onRoomCreated = viewModel::createRoom,
@@ -80,6 +87,7 @@ private fun OutletScreen(
     onSignOut: () -> Unit,
     onPowerStateRequested: (PowerState) -> Unit,
     onSwitchChannelStateRequested: (String, String, PowerState) -> Unit,
+    onDevicePowerStateRequested: (String, PowerState) -> Unit,
     onFloorSelected: (String) -> Unit,
     onFloorCreated: (String, Int, Int, Int) -> Unit,
     onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
@@ -101,6 +109,7 @@ private fun OutletScreen(
                 onSignOut = onSignOut,
                 onPowerStateRequested = onPowerStateRequested,
                 onSwitchChannelStateRequested = onSwitchChannelStateRequested,
+                onDevicePowerStateRequested = onDevicePowerStateRequested,
                 onFloorSelected = onFloorSelected,
                 onFloorCreated = onFloorCreated,
                 onRoomCreated = onRoomCreated,
@@ -224,6 +233,7 @@ private fun OutletDashboard(
     onSignOut: () -> Unit,
     onPowerStateRequested: (PowerState) -> Unit,
     onSwitchChannelStateRequested: (String, String, PowerState) -> Unit,
+    onDevicePowerStateRequested: (String, PowerState) -> Unit,
     onFloorSelected: (String) -> Unit,
     onFloorCreated: (String, Int, Int, Int) -> Unit,
     onRoomCreated: (String, Int, Int, Int, Int) -> Unit,
@@ -236,6 +246,7 @@ private fun OutletDashboard(
     onDeviceMoved: (String, Int, Int) -> Unit,
     onDeviceDeleted: (String) -> Unit,
 ) {
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -253,7 +264,7 @@ private fun OutletDashboard(
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Text(
-                    text = "Ground floor",
+                    text = state.selectedFloor?.name ?: "No floor selected",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -265,6 +276,22 @@ private fun OutletDashboard(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        PrimaryTabRow(selectedTabIndex = selectedTab) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = { Text("Devices") },
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text("Layout") },
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        if (selectedTab == 0) {
         if (state.isLoadingAlerts || state.alerts.isNotEmpty()) {
             Text(
                 text = "Safety alerts",
@@ -282,6 +309,41 @@ private fun OutletDashboard(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
+        Text(
+            text = "Your devices",
+            style = MaterialTheme.typography.titleLarge,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Monitor confirmed state and send power commands.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        when {
+            state.isLoadingDevices -> {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Loading devices…")
+            }
+
+            state.devices.isEmpty() -> Text("No devices yet. Add one from the Layout tab.")
+
+            else -> state.devices.forEach { device ->
+                DeviceSummaryCard(
+                    device = device,
+                    commandsInFlight = state.switchCommandsInFlight,
+                    deviceCommandsInFlight = state.deviceCommandsInFlight,
+                    onSwitchChannelStateRequested = onSwitchChannelStateRequested,
+                    onDevicePowerStateRequested = onDevicePowerStateRequested,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+        } else {
+
         FloorDashboardSection(
             state = state,
             onFloorSelected = onFloorSelected,
@@ -296,44 +358,6 @@ private fun OutletDashboard(
             onDeviceMoved = onDeviceMoved,
             onDeviceDeleted = onDeviceDeleted,
         )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Device dashboard",
-            style = MaterialTheme.typography.titleLarge,
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        when {
-            state.isLoadingDevices -> {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Loading devices…")
-            }
-
-            state.devices.isEmpty() -> Text("No devices are configured on this home.")
-
-            else -> state.devices.forEach { device ->
-                DeviceSummaryCard(
-                    device = device,
-                    commandsInFlight = state.switchCommandsInFlight,
-                    onSwitchChannelStateRequested = onSwitchChannelStateRequested,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
-
-        state.outlet?.let { outlet ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Main outlet control", style = MaterialTheme.typography.titleLarge)
-            Spacer(modifier = Modifier.height(12.dp))
-            OutletCard(
-                outlet = outlet,
-                isSendingCommand = state.isSendingCommand,
-                onPowerStateRequested = onPowerStateRequested,
-            )
         }
 
         state.errorMessage?.let { message ->
@@ -378,7 +402,9 @@ private fun AlertCard(alert: HomeAlert) {
 private fun DeviceSummaryCard(
     device: SmartDevice,
     commandsInFlight: Set<String>,
+    deviceCommandsInFlight: Set<String>,
     onSwitchChannelStateRequested: (String, String, PowerState) -> Unit,
+    onDevicePowerStateRequested: (String, PowerState) -> Unit,
 ) {
     val containerColor = when (device.reportedStatus) {
         DeviceStatus.ON -> MaterialTheme.colorScheme.primaryContainer
@@ -398,22 +424,76 @@ private fun DeviceSummaryCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(device.name, style = MaterialTheme.typography.titleMedium)
-                    Text(device.profile.displayName, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "${device.profile.displayName} · ${device.roomId ?: "No room"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
-                Text(device.reportedStatus.name, style = MaterialTheme.typography.labelLarge)
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Text(
+                        device.reportedStatus.name,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text("Grid ${device.column}, ${device.row}", style = MaterialTheme.typography.bodySmall)
             val detail = when (val config = device.configuration) {
                 DeviceConfiguration.Outlet -> null
-                is DeviceConfiguration.MultiSwitch -> "${config.channelCount} channels"
+                is DeviceConfiguration.MultiSwitch -> "${config.channelCount} independently controlled channels"
                 is DeviceConfiguration.SafetyOutlet ->
                     "Safety cutoff: ${config.maxOnDurationSeconds / 60} minutes"
-                is DeviceConfiguration.Light ->
-                    if (config.scheduleEnabled) "Schedule enabled" else "Schedule disabled"
+                is DeviceConfiguration.Light -> if (config.scheduleEnabled) {
+                    "Automation enabled"
+                } else {
+                    "Manual control · automation not configured"
+                }
                 is DeviceConfiguration.Camera -> "Mock camera media configured"
             }
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            val supportsCommonPower = device.profile in setOf(
+                DeviceProfile.OUTLET,
+                DeviceProfile.SAFETY_OUTLET,
+                DeviceProfile.LIGHT,
+            )
+            if (supportsCommonPower) {
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+                val unavailableReason = when {
+                    !device.reportedStatus.acceptsPowerCommands ->
+                        "Control unavailable: device reports ${device.reportedStatus.name}."
+                    device.commandState == com.smarthome.app.domain.model.CommandState.PENDING ->
+                        "Waiting for hardware confirmation…"
+                    else -> "Hardware confirmed ${device.reportedStatus.name}."
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Power", style = MaterialTheme.typography.titleSmall)
+                        Text(unavailableReason, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(
+                        checked = device.desiredStatus == PowerState.ON,
+                        onCheckedChange = { enabled ->
+                            onDevicePowerStateRequested(
+                                device.id,
+                                if (enabled) PowerState.ON else PowerState.OFF,
+                            )
+                        },
+                        enabled = device.reportedStatus.acceptsPowerCommands &&
+                            device.commandState != com.smarthome.app.domain.model.CommandState.PENDING &&
+                            device.id !in deviceCommandsInFlight,
+                    )
+                }
+            }
             val multiSwitch = device.configuration as? DeviceConfiguration.MultiSwitch
             multiSwitch?.channels?.forEach { channel ->
                 Spacer(modifier = Modifier.height(12.dp))
@@ -436,19 +516,17 @@ private fun DeviceSummaryCard(
                         )
                     }
                     val key = "${device.id}:${channel.id}"
-                    Button(
-                        onClick = {
-                            val target = if (channel.desiredStatus == PowerState.ON) {
-                                PowerState.OFF
-                            } else {
-                                PowerState.ON
-                            }
-                            onSwitchChannelStateRequested(device.id, channel.id, target)
+                    Switch(
+                        checked = channel.desiredStatus == PowerState.ON,
+                        onCheckedChange = { enabled ->
+                            onSwitchChannelStateRequested(
+                                device.id,
+                                channel.id,
+                                if (enabled) PowerState.ON else PowerState.OFF,
+                            )
                         },
                         enabled = key !in commandsInFlight && device.reportedStatus.acceptsPowerCommands,
-                    ) {
-                        Text(if (channel.desiredStatus == PowerState.ON) "Turn off" else "Turn on")
-                    }
+                    )
                 }
             }
         }

@@ -207,6 +207,45 @@ class OutletViewModelTest {
     }
 
     @Test
+    fun `generic light power control routes to selected device`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+            repository.emitDevices(
+                listOf(
+                    SmartDevice(
+                        id = "porch-light",
+                        name = "Porch light",
+                        profile = DeviceProfile.LIGHT,
+                        floorId = "ground-floor",
+                        roomId = "porch",
+                        column = 2,
+                        row = 2,
+                        desiredStatus = PowerState.OFF,
+                        reportedStatus = DeviceStatus.OFF,
+                        commandState = CommandState.IDLE,
+                        configuration = DeviceConfiguration.Light(scheduleEnabled = false),
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            viewModel.requestDevicePowerState("porch-light", PowerState.ON)
+            advanceUntilIdle()
+
+            assertEquals("porch-light", repository.requestedDeviceId)
+            assertEquals(PowerState.ON, repository.requestedPowerState)
+            assertTrue(viewModel.uiState.value.deviceCommandsInFlight.isEmpty())
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
     fun `placing outlet infers containing room and forwards logical coordinate`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
@@ -426,6 +465,9 @@ private class FakeOutletRepository(
     var requestedPowerState: PowerState? = null
         private set
 
+    var requestedDeviceId: String? = null
+        private set
+
     var switchChannelRequest: SwitchChannelRequest? = null
         private set
 
@@ -469,6 +511,7 @@ private class FakeOutletRepository(
         deviceId: String,
         powerState: PowerState,
     ) {
+        requestedDeviceId = deviceId
         requestedPowerState = powerState
     }
 
