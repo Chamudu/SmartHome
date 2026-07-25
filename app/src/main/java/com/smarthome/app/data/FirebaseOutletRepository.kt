@@ -12,6 +12,8 @@ import com.smarthome.app.domain.model.DeviceConfiguration
 import com.smarthome.app.domain.model.DeviceProfile
 import com.smarthome.app.domain.model.NewDevice
 import com.smarthome.app.domain.model.SmartDevice
+import com.smarthome.app.domain.model.AlertSeverity
+import com.smarthome.app.domain.model.HomeAlert
 import com.smarthome.app.domain.repository.OutletRepository
 import java.util.UUID
 import kotlinx.coroutines.channels.awaitClose
@@ -76,6 +78,26 @@ class FirebaseOutletRepository(
                         snapshot.documents
                             .map(DocumentSnapshot::toSmartDevice)
                             .sortedBy(SmartDevice::name)
+                    }.onSuccess(::trySend).onFailure(::close)
+                }
+            }
+
+        awaitClose { registration.remove() }
+    }
+
+    override fun observeAlerts(homeId: String): Flow<List<HomeAlert>> = callbackFlow {
+        val registration = firestore
+            .collection("homes")
+            .document(homeId)
+            .collection("alerts")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(20)
+            .addSnapshotListener { snapshot, exception ->
+                when {
+                    exception != null -> close(exception)
+                    snapshot == null -> close(IllegalStateException("Alert snapshot is missing."))
+                    else -> runCatching {
+                        snapshot.documents.map(DocumentSnapshot::toHomeAlert)
                     }.onSuccess(::trySend).onFailure(::close)
                 }
             }
@@ -251,6 +273,24 @@ private fun DocumentSnapshot.toSmartDevice(): SmartDevice {
         reportedStatus = parseDeviceStatus(getString("reported.status")),
         commandState = parseCommandState(getString("commandState")),
         configuration = configuration,
+    )
+}
+
+private fun DocumentSnapshot.toHomeAlert(): HomeAlert {
+    val severityValue = getString("severity")
+    val severity = AlertSeverity.entries.firstOrNull { it.name == severityValue }
+        ?: throw IllegalStateException("Invalid alert severity: $severityValue")
+    return HomeAlert(
+        id = id,
+        deviceId = getString("deviceId")
+            ?: throw IllegalStateException("Alert device is missing."),
+        type = getString("type")
+            ?: throw IllegalStateException("Alert type is missing."),
+        severity = severity,
+        message = getString("message")
+            ?: throw IllegalStateException("Alert message is missing."),
+        createdAtMillis = getTimestamp("createdAt")?.toDate()?.time
+            ?: throw IllegalStateException("Alert creation time is missing."),
     )
 }
 

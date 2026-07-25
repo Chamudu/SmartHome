@@ -30,7 +30,10 @@
 | Firebase Emulator Suite | Isolated rule evaluation without production data |
 | Oxlint | Static checks for the simulator source |
 | Firebase CLI | Project selection, emulators, rules compilation, and deployment |
-| Node.js 22 | Supported JavaScript runtime for tooling and future Cloud Functions |
+| Node.js 22 | Runtime for tooling and deployed TypeScript Cloud Functions |
+| Firebase Functions v2 | Firestore update trigger and scheduled trusted safety enforcement |
+| Firebase Admin SDK | Privileged transactional device, event, and alert writes after backend validation |
+| Cloud Scheduler integration | Once-per-minute due-device scan independent of client lifecycle |
 
 ## Engineering concepts
 
@@ -48,3 +51,5 @@
   registrations through `awaitClose`.
 - **Atomicity and idempotency:** document writes initialize complete state; request IDs prepare commands
   for safe correlation and retry handling.
+- **Trusted time and at-least-once delivery:** server timestamps establish deadlines; transactions and
+  deterministic event IDs make repeated function execution safe.

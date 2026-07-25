@@ -19,6 +19,8 @@ firebase emulators:exec --project demo-smart-home --only firestore \
 npm --prefix simulator run typecheck
 npm --prefix simulator run lint
 npm --prefix simulator run build
+
+npm --prefix functions run check
 ```
 
 ## Current automated coverage
@@ -38,6 +40,9 @@ npm --prefix simulator run build
 - Valid multi-switch creation, invalid channel counts, unsafe camera URI denial, and simulator creation
   denial.
 - Complete valid outlet, safety outlet, light, and camera seed shapes.
+- Safety timer start/clear transitions, duration bounds, exact due-time boundary, and retry behavior.
+- Active members can read trusted alerts while owner and simulator clients cannot forge them.
+- A ViewModel repository stream exposes backend-created alerts to reactive Android UI state.
 
 ## Manual acceptance focus
 

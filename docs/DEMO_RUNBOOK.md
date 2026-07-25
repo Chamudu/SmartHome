@@ -32,11 +32,12 @@ screenshots or recordings.
 9. Attempt an invalid four-channel switch or unsafe camera URI to show validation.
 10. Filter devices and report error/disconnection independently from the simulator.
 11. Briefly show emulator-backed rule tests as evidence that direct APIs cannot bypass authorization.
+12. With deployed functions, turn on a short-duration safety outlet and show automatic `OFF`, its event,
+    and the persistent critical alert in Android. Allow for the scheduler's one-minute scan interval.
 
 ## Planned final walkthrough additions
 
 - Independent multi-switch channel control.
-- Short safety-outlet duration followed by a backend cutoff, event, and alert.
 - Timezone-aware light schedule execution.
 - Camera snapshot, capture time, placeholder/error behavior, and optional camera phone upload.
 - Activity history and usage totals.

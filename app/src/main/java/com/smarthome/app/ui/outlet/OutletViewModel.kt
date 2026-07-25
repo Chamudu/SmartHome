@@ -12,6 +12,7 @@ import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.model.SmartDevice
+import com.smarthome.app.domain.model.HomeAlert
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.FloorContainsDevicesException
 import com.smarthome.app.domain.repository.RoomContainsDevicesException
@@ -36,6 +37,8 @@ data class OutletUiState(
     val devices: List<SmartDevice> = emptyList(),
     val isLoadingDevices: Boolean = false,
     val isCreatingDevice: Boolean = false,
+    val alerts: List<HomeAlert> = emptyList(),
+    val isLoadingAlerts: Boolean = false,
     val errorMessage: String? = null,
     val floors: List<FloorPlan> = emptyList(),
     val selectedFloorId: String? = null,
@@ -65,6 +68,7 @@ class OutletViewModel(
 
     private var outletObservation: Job? = null
     private var deviceObservation: Job? = null
+    private var alertObservation: Job? = null
     private var floorObservation: Job? = null
     private var roomObservation: Job? = null
 
@@ -72,6 +76,7 @@ class OutletViewModel(
         if (repository.hasAuthenticatedUser) {
             observeOutlet()
             observeDevices()
+            observeAlerts()
             observeFloors()
         }
     }
@@ -128,6 +133,7 @@ class OutletViewModel(
                 }
                 observeOutlet()
                 observeDevices()
+                observeAlerts()
                 observeFloors()
             }.onFailure {
                 mutableUiState.update {
@@ -616,6 +622,8 @@ class OutletViewModel(
         outletObservation = null
         deviceObservation?.cancel()
         deviceObservation = null
+        alertObservation?.cancel()
+        alertObservation = null
         floorObservation?.cancel()
         floorObservation = null
         roomObservation?.cancel()
@@ -681,6 +689,31 @@ class OutletViewModel(
                         it.copy(
                             devices = devices,
                             isLoadingDevices = false,
+                            errorMessage = null,
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun observeAlerts() {
+        alertObservation?.cancel()
+        mutableUiState.update { it.copy(isLoadingAlerts = true) }
+        alertObservation = viewModelScope.launch {
+            repository.observeAlerts(HOME_ID)
+                .catch {
+                    mutableUiState.update {
+                        it.copy(
+                            isLoadingAlerts = false,
+                            errorMessage = "Safety alerts could not be loaded.",
+                        )
+                    }
+                }
+                .collect { alerts ->
+                    mutableUiState.update {
+                        it.copy(
+                            alerts = alerts,
+                            isLoadingAlerts = false,
                             errorMessage = null,
                         )
                     }

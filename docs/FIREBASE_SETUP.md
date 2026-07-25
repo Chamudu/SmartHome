@@ -180,7 +180,27 @@ Deploy Firestore rules only after running their emulator-backed tests:
 firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-## 8. Build and run the Android client
+## 8. Verify and deploy backend automation
+
+The `functions/` package targets the Node.js 22 runtime. Build and test it before deployment:
+
+```bash
+npm --prefix functions install
+npm --prefix functions run check
+```
+
+Scheduled functions require a billing-enabled Firebase project. Enabling billing is an explicit project
+owner decision. After that decision, deploy the tested index and functions:
+
+```bash
+firebase deploy --only firestore:indexes,functions
+```
+
+The safety scheduler scans once per minute, so a due cutoff may be applied up to approximately one
+minute after its exact deadline. The transaction rechecks the current document and uses deterministic
+event/alert IDs so retries or overlapping invocations do not create duplicates.
+
+## 9. Build and run the Android client
 
 The Android client uses the Firebase Android BoM so Authentication and Firestore SDK versions remain
 compatible. The Google Services Gradle plugin converts `app/google-services.json` into generated Android

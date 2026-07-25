@@ -28,6 +28,7 @@ captures/
 # JavaScript output
 node_modules/
 dist/
+functions/lib/
 coverage/
 *.log
 

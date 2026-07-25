@@ -4,6 +4,7 @@ import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.NewDevice
+import com.smarthome.app.domain.model.HomeAlert
 import kotlinx.coroutines.flow.Flow
 
 interface OutletRepository {
@@ -22,6 +23,8 @@ interface OutletRepository {
     ): Flow<OutletDevice>
 
     fun observeDevices(homeId: String): Flow<List<SmartDevice>>
+
+    fun observeAlerts(homeId: String): Flow<List<HomeAlert>>
 
     suspend fun createDevice(
         homeId: String,

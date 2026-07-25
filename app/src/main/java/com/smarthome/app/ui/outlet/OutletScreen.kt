@@ -40,6 +40,8 @@ import com.smarthome.app.domain.model.DeviceConfiguration
 import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.SmartDevice
+import com.smarthome.app.domain.model.AlertSeverity
+import com.smarthome.app.domain.model.HomeAlert
 
 @Composable
 fun OutletRoute(
@@ -259,6 +261,23 @@ private fun OutletDashboard(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        if (state.isLoadingAlerts || state.alerts.isNotEmpty()) {
+            Text(
+                text = "Safety alerts",
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            if (state.isLoadingAlerts) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+            } else {
+                state.alerts.take(3).forEach { alert ->
+                    AlertCard(alert)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
         FloorDashboardSection(
             state = state,
             onFloorSelected = onFloorSelected,
@@ -316,6 +335,32 @@ private fun OutletDashboard(
                 text = message,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlertCard(alert: HomeAlert) {
+    val containerColor = when (alert.severity) {
+        AlertSeverity.CRITICAL -> MaterialTheme.colorScheme.errorContainer
+        AlertSeverity.WARNING -> MaterialTheme.colorScheme.tertiaryContainer
+        AlertSeverity.INFO -> MaterialTheme.colorScheme.secondaryContainer
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = alert.severity.name,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(alert.message, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = "Device: ${alert.deviceId}",
+                style = MaterialTheme.typography.bodySmall,
             )
         }
     }

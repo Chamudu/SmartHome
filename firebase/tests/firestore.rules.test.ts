@@ -136,6 +136,16 @@ beforeEach(async () => {
       createdAt: now,
       updatedAt: now,
     })
+
+    await setDoc(doc(database, 'homes', HOME_ID, 'alerts', 'safety-alert-1'), {
+      deviceId: DEVICE_ID,
+      eventId: 'safety-event-1',
+      severity: 'CRITICAL',
+      type: 'SAFETY_CUTOFF',
+      message: 'Device was switched off for safety.',
+      createdAt: now,
+      readBy: {},
+    })
   })
 })
 
@@ -235,6 +245,60 @@ describe('outlet authorization', () => {
         updatedAt: new Date(),
       }),
     )
+  })
+})
+
+describe('safety alert authorization', () => {
+  const alertPath = ['homes', HOME_ID, 'alerts', 'safety-alert-1'] as const
+
+  it('allows an active owner to read a backend-created alert', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertSucceeds(getDoc(doc(database, ...alertPath)))
+  })
+
+  it('denies an owner creating a forged safety alert', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertFails(setDoc(doc(database, 'homes', HOME_ID, 'alerts', 'forged-alert'), {
+      deviceId: DEVICE_ID,
+      eventId: 'forged-event',
+      severity: 'CRITICAL',
+      type: 'SAFETY_CUTOFF',
+      message: 'Forged alert',
+      createdAt: new Date(),
+      readBy: {},
+    }))
+  })
+
+  it('denies the simulator creating a forged safety alert', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(setDoc(doc(database, 'homes', HOME_ID, 'alerts', 'simulator-alert'), {
+      deviceId: DEVICE_ID,
+      eventId: 'forged-event',
+      severity: 'CRITICAL',
+      type: 'SAFETY_CUTOFF',
+      message: 'Forged alert',
+      createdAt: new Date(),
+      readBy: {},
+    }))
+  })
+
+  it('allows a member to mark only their own alert read', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertSucceeds(updateDoc(doc(database, ...alertPath), {
+      [`readBy.${OWNER_UID}`]: new Date(),
+    }))
+  })
+
+  it('denies a member modifying another user read state', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertFails(updateDoc(doc(database, ...alertPath), {
+      [`readBy.${SIMULATOR_UID}`]: new Date(),
+    }))
   })
 })
 

@@ -30,14 +30,15 @@ completed items should remain checked for release traceability.
 - [x] Validate room boundaries and prevent overlaps.
 - [x] Implement device placement and status indicators for the outlet vertical slice.
 - [ ] Add a touch-first floor editor with drag selection and visible accessible alternatives.
-- [ ] Add in-app creation and configuration for every supported device profile.
-- [ ] Apply a cohesive Material 3 theme, navigation structure, icons, and semantic status styling.
+- [x] Add in-app creation and initial configuration for every supported device profile.
+- [x] Apply a cohesive Material 3 theme and semantic status styling.
 - [ ] Verify 48 dp targets, screen-reader semantics, font scaling, and light/dark themes.
 - [ ] Implement variable-channel switch units.
-- [ ] Implement safety-critical device configuration.
-- [ ] Implement the trusted maximum-duration cutoff.
+- [x] Implement initial safety-critical device duration configuration.
+- [x] Implement and locally verify the trusted maximum-duration cutoff.
 - [ ] Implement scheduled light operation with timezone-aware server timestamps.
-- [ ] Implement persistent in-app alerts.
+- [x] Implement persistent realtime safety-alert display.
+- [ ] Add complete alert history and per-user read acknowledgement.
 - [ ] Implement mock camera snapshots or stream links.
 - [ ] Implement event history and basic usage reporting.
 - [ ] Support error, disconnected, loading, empty, and offline UI states.
@@ -49,6 +50,7 @@ completed items should remain checked for release traceability.
 - [x] Simulate state changes, errors, disconnects, and reconnects.
 - [x] Create a deterministic, idempotent seed tool with two floors and every device profile.
 - [ ] Add end-to-end tests for Android/backend/simulator data contracts where practical.
+- [ ] Deploy and physically accept the safety functions after billing is explicitly enabled.
 
 ## P1 — Release readiness
 

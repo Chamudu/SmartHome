@@ -46,6 +46,7 @@ Both clients subscribe to the affected documents and therefore redraw without a 
 ```text
 SmartHome/
 ├── app/                    Android application module
+├── functions/              Trusted TypeScript Cloud Functions
 ├── simulator/              React/TypeScript application
 ├── firebase/               Firestore rules, indexes, and emulator tests
 ├── docs/                   Product and engineering documentation
@@ -53,7 +54,7 @@ SmartHome/
 └── firebase.json           Firebase CLI and emulator configuration
 ```
 
-Cloud Functions, repeatable seed scripts, and CI workflows are planned but not implemented yet.
+Cloud Functions and a repeatable authenticated seed script are implemented. CI workflows remain planned.
 
 ## Core engineering concerns
 

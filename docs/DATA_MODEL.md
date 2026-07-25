@@ -255,8 +255,8 @@ An alert is shared home data, so read state is stored per user rather than as on
 ```
 
 Backend automation follows the same desired/reported contract. For the simulator-only MVP, the cutoff
-function may atomically write both desired and reported `OFF` so safety behavior remains demonstrable
-without a permanently connected simulator; this exception must be recorded in the implementation ADR.
+function atomically writes both desired and reported `OFF` so safety behavior remains demonstrable
+without a permanently connected simulator. ADR 0006 records this deliberate simulation boundary.
 
 ## Security ownership
 
@@ -272,7 +272,9 @@ actor's membership role.
 
 ## Initial indexes
 
-Indexes are added only for implemented queries. Expected composite indexes include:
+Indexes are added only for implemented queries. The cutoff query uses a collection-group composite
+index over `profile`, `reported.status`, and `config.cutoffDueAt`, all ascending. Additional expected
+indexes include:
 
 - Devices by `floorId`, then `name`
 - Alerts by `createdAt` descending

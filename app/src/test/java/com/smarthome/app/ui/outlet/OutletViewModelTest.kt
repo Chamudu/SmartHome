@@ -9,6 +9,8 @@ import com.smarthome.app.domain.model.NewDevice
 import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.model.SmartDevice
+import com.smarthome.app.domain.model.HomeAlert
+import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.OutletRepository
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +30,39 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OutletViewModelTest {
+
+    @Test
+    fun `backend safety alert is exposed in realtime UI state`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+
+            repository.emitAlerts(
+                listOf(
+                    HomeAlert(
+                        id = "alert-1",
+                        deviceId = "iron",
+                        type = "SAFETY_CUTOFF",
+                        severity = AlertSeverity.CRITICAL,
+                        message = "Iron was switched off.",
+                        createdAtMillis = 1234L,
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("alert-1", viewModel.uiState.value.alerts.single().id)
+            assertFalse(viewModel.uiState.value.isLoadingAlerts)
+
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
 
     @Test
     fun `successful sign in starts outlet observation`() = runTest {
@@ -329,6 +364,7 @@ private class FakeOutletRepository(
 ) : OutletRepository {
     private val outlets = MutableSharedFlow<OutletDevice>(replay = 1)
     private val devices = MutableSharedFlow<List<SmartDevice>>(replay = 1)
+    private val alerts = MutableSharedFlow<List<HomeAlert>>(replay = 1)
 
     var signedInEmail: String? = null
         private set
@@ -363,6 +399,8 @@ private class FakeOutletRepository(
     ): Flow<OutletDevice> = outlets
 
     override fun observeDevices(homeId: String): Flow<List<SmartDevice>> = devices
+
+    override fun observeAlerts(homeId: String): Flow<List<HomeAlert>> = alerts
 
     override suspend fun createDevice(homeId: String, device: NewDevice): String {
         createdDevice = device
@@ -405,5 +443,9 @@ private class FakeOutletRepository(
 
     suspend fun emit(outlet: OutletDevice) {
         outlets.emit(outlet)
+    }
+
+    suspend fun emitAlerts(value: List<HomeAlert>) {
+        alerts.emit(value)
     }
 }

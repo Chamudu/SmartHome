@@ -22,14 +22,18 @@ Status date: 2026-07-25
 - Multi-device simulator collection listener, floor/profile filters, automatic command acknowledgement,
   and independent status/error/disconnection reports.
 - Authenticated deterministic seed tool for two floors, four rooms, and all five profiles.
+- Node 22/TypeScript second-generation Cloud Functions that start safety timers and enforce due cutoffs.
+- Idempotent cutoff transactions that update device state and create one event plus one persistent alert.
+- Real-time safety-alert observation and critical alert cards in Android.
 
 ## Current verification evidence
 
 | Layer | Evidence |
 | --- | --- |
-| Android domain/ViewModel | 18 passing JUnit tests |
+| Android domain/ViewModel | 19 passing JUnit tests |
 | Android packaging | `:app:assembleDebug` succeeds |
-| Firestore authorization/schema | 21 passing emulator-backed Vitest tests |
+| Firestore authorization/schema | 26 passing emulator-backed Vitest tests |
+| Cloud Functions | TypeScript build and 5 Vitest state-machine tests pass |
 | Simulator | TypeScript typecheck, Oxlint, and Vite production build succeed |
 | Cloud rules | Tested rules deployed successfully to the development Firebase project |
 | Physical integration | Outlet synchronization and earlier floor lifecycle accepted on a phone |
@@ -37,17 +41,13 @@ Status date: 2026-07-25
 ## Implemented but awaiting physical acceptance
 
 - Branded theme on representative light/dark system modes.
-- Drag-to-prefill room creation and long-press-to-prefill device creation.
-- Creation and reactive display of every profile from Android.
-
-The last install attempt could not run because no ADB device was connected; this is an environment state,
-not an APK compilation failure.
+- Automatic cutoff and persistent alert display after production Functions deployment.
 
 ## Not implemented yet
 
 - Touch resize/move for existing rooms; device movement currently uses a coordinate form after tapping.
 - Per-channel multi-switch commands.
-- Safety configuration editing, trusted Cloud Function cutoff, events, and alerts.
+- Editing an existing safety duration and production deployment of the verified cutoff functions.
 - Scheduled light execution.
 - Camera snapshot rendering/upload and optional second-phone camera node.
 - Executing the seed against a target environment still requires owner credentials exported locally.
