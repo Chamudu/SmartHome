@@ -12,6 +12,7 @@
 
 ```bash
 ./gradlew :app:testDebugUnitTest :app:assembleDebug
+./gradlew --no-configuration-cache :app:lintDebug
 
 firebase emulators:exec --project demo-smart-home --only firestore \
   "npm --prefix firebase/tests test"
@@ -53,6 +54,10 @@ npm --prefix functions run check
 - Owners may edit only light schedule configuration, while malformed times and simulator edits are denied.
 - The backend evaluator covers normal and overnight windows, exclusive end boundaries, invalid times,
   equal endpoints, and invalid IANA timezone identifiers.
+- Authentication exposes the restored/signed-in account email to the Profile destination without
+  retaining the password.
+- Android lint checks resources, manifest, dependencies, Compose source, and accessibility-related
+  static rules. Physical TalkBack and touch-target acceptance remains a separate manual test.
 
 ## Manual acceptance focus
 

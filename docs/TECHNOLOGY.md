@@ -15,6 +15,7 @@
 | Cloud Firestore Android SDK | Real-time snapshots, atomic document writes, batches, queries, and local caching |
 | Firebase Android BoM | Keeps Firebase library versions mutually compatible |
 | Google Services plugin | Converts local Firebase Android configuration into generated resources |
+| Coil 2.7 | Loads and caches HTTPS mock-camera snapshots in Compose with asynchronous state callbacks |
 | JUnit 4 and coroutine-test | Tests geometry, status rules, and ViewModel asynchronous behavior |
 
 ## Simulator and Firebase tooling
@@ -55,3 +56,5 @@
   channel updates from being lost.
 - **Trusted time and at-least-once delivery:** server timestamps establish deadlines; transactions and
   deterministic event IDs make repeated function execution safe.
+- **Asynchronous image pipeline:** Coil performs network fetch, decoding, size-aware rendering, and
+  memory/disk caching away from the main UI work while Compose displays loading/content/error states.

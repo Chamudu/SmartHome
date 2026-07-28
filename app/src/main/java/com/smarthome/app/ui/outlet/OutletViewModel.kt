@@ -33,6 +33,7 @@ data class OutletUiState(
     val email: String = "",
     val password: String = "",
     val isAuthenticated: Boolean = false,
+    val accountEmail: String? = null,
     val isSigningIn: Boolean = false,
     val isLoadingOutlet: Boolean = false,
     val isSendingCommand: Boolean = false,
@@ -67,6 +68,7 @@ class OutletViewModel(
     private val mutableUiState = MutableStateFlow(
         OutletUiState(
             isAuthenticated = repository.hasAuthenticatedUser,
+            accountEmail = repository.authenticatedUserEmail,
         ),
     )
 
@@ -134,6 +136,7 @@ class OutletViewModel(
                     it.copy(
                         password = "",
                         isAuthenticated = true,
+                        accountEmail = repository.authenticatedUserEmail ?: email,
                         isSigningIn = false,
                     )
                 }

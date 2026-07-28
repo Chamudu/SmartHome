@@ -40,11 +40,22 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.DeviceProfile
+import com.smarthome.app.domain.model.DeviceStatus
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.defaultFloorName
+import com.smarthome.app.ui.theme.SmartHomeIcons
+import com.smarthome.app.ui.theme.SmartHomeThemeColors
 
 @Composable
 fun FloorDashboardSection(
@@ -479,13 +490,17 @@ private fun FloorGrid(
                         width = cellWidth * room.width,
                         height = cellHeight * room.height,
                     )
-                    .background(roomBackground)
-                    .border(2.dp, roomBorder)
-                    .padding(4.dp),
+                    .background(
+                        color = roomBackground,
+                        shape = RoundedCornerShape(4.dp)
+                    )
+                    .border(1.5.dp, roomBorder, shape = RoundedCornerShape(4.dp))
+                    .padding(6.dp),
             ) {
                 Text(
                     text = room.name,
                     style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -506,12 +521,39 @@ private fun FloorGrid(
                         width = cellWidth * (right - left + 1),
                         height = cellHeight * (bottom - top + 1),
                     )
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
-                    .border(2.dp, MaterialTheme.colorScheme.primary),
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                    .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)),
             )
         }
 
         devices.forEach { device ->
+            val isDeviceOn = device.reportedStatus == DeviceStatus.ON
+            val isError = device.reportedStatus == DeviceStatus.ERROR
+            val isDisconnected = device.reportedStatus == DeviceStatus.DISCONNECTED
+
+            val (badgeBg, badgeBorder, iconTint) = when {
+                isError -> Triple(
+                    MaterialTheme.colorScheme.errorContainer,
+                    MaterialTheme.colorScheme.error,
+                    MaterialTheme.colorScheme.onErrorContainer
+                )
+                isDisconnected -> Triple(
+                    SmartHomeThemeColors.statusDisconnectedContainer,
+                    SmartHomeThemeColors.statusDisconnected,
+                    SmartHomeThemeColors.statusDisconnected
+                )
+                isDeviceOn -> Triple(
+                    SmartHomeThemeColors.statusOnContainer,
+                    SmartHomeThemeColors.statusOn,
+                    SmartHomeThemeColors.statusOn
+                )
+                else -> Triple(
+                    MaterialTheme.colorScheme.secondaryContainer,
+                    MaterialTheme.colorScheme.outline,
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+
             Box(
                 modifier = Modifier
                     .offset(
@@ -519,16 +561,28 @@ private fun FloorGrid(
                         y = cellHeight * device.row,
                     )
                     .size(cellWidth, cellHeight)
-                    .background(MaterialTheme.colorScheme.errorContainer)
-                    .border(2.dp, MaterialTheme.colorScheme.error)
-                    .clickable { onDeviceTapped(device) }
-                    .padding(2.dp),
+                    .padding(2.dp)
+                    .background(badgeBg, RoundedCornerShape(6.dp))
+                    .border(1.5.dp, badgeBorder, RoundedCornerShape(6.dp))
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = "${device.name}, ${device.profile.displayName}"
+                        stateDescription = device.reportedStatus.name
+                        role = Role.Button
+                    }
+                    .clickable { onDeviceTapped(device) },
+                contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "${device.profile.displayName}\n${device.reportedStatus.name}",
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                Icon(
+                    imageVector = when (device.profile) {
+                        DeviceProfile.LIGHT -> SmartHomeIcons.Light
+                        DeviceProfile.CAMERA -> SmartHomeIcons.Camera
+                        DeviceProfile.SAFETY_OUTLET -> SmartHomeIcons.Safety
+                        DeviceProfile.MULTI_SWITCH -> SmartHomeIcons.Power
+                        DeviceProfile.OUTLET -> SmartHomeIcons.Power
+                    },
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

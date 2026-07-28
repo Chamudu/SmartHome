@@ -16,11 +16,25 @@ The current authenticated dashboard introduces two task-focused tabs as an incre
 
 - **Devices** — alerts, confirmed status, pending feedback, and direct power/channel controls.
 - **Layout** — floor selection, grid editing, rooms, placement, and device creation.
+- **Profile** — authenticated account identity and the deliberate sign-out action.
 
 This keeps frequent monitoring actions visible without mixing them into the longer administration flow.
 The Devices tab uses a high-contrast home header, compact Online/Active/Alerts summaries, profile icons,
 and rounded state cards. User-facing labels resolve floor and room names; document IDs remain diagnostic
 metadata and are not primary mobile copy.
+
+Sign-out is located in Profile instead of the home header. This reduces the chance of an accidental
+session-ending action during daily control and groups account actions with account context.
+
+### Monitor a mock camera snapshot
+
+```text
+Devices → Cameras filter → Camera card → Loading → Snapshot / unavailable fallback
+```
+
+The camera card labels URI media as a mock snapshot, never as a live feed or recording. Its loading and
+error text remains visible without relying on color, and the loaded image has an accessibility
+description containing the device name.
 
 ## Primary user flows
 

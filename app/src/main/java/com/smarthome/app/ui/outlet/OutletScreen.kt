@@ -40,9 +40,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -59,6 +59,13 @@ import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.model.HomeAlert
 import com.smarthome.app.ui.theme.SmartHomeIcons
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import com.smarthome.app.ui.theme.SmartHomeThemeColors
+import coil.compose.AsyncImage
 
 @Composable
 fun OutletRoute(
@@ -275,20 +282,33 @@ private fun OutletDashboard(
             },
         )
     }
+    var selectedFilter by rememberSaveable { mutableStateOf("All") }
+    val filters = listOf("All", "Lights", "Outlets", "Cameras", "Switches", "Active")
+
+    val filteredDevices = remember(state.devices, selectedFilter) {
+        when (selectedFilter) {
+            "Lights" -> state.devices.filter { it.profile == DeviceProfile.LIGHT }
+            "Outlets" -> state.devices.filter { it.profile == DeviceProfile.OUTLET || it.profile == DeviceProfile.SAFETY_OUTLET }
+            "Cameras" -> state.devices.filter { it.profile == DeviceProfile.CAMERA }
+            "Switches" -> state.devices.filter { it.profile == DeviceProfile.MULTI_SWITCH }
+            "Active" -> state.devices.filter { it.reportedStatus == DeviceStatus.ON }
+            else -> state.devices
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(20.dp),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    brush = Brush.linearGradient(
-                        listOf(Color(0xFF20A4D5), Color(0xFF087DB7)),
-                    ),
-                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(24.dp),
                 )
                 .padding(20.dp),
         ) {
@@ -298,29 +318,40 @@ private fun OutletDashboard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(SmartHomeIcons.Home, contentDescription = null, tint = Color.White)
+                    Icon(
+                        SmartHomeIcons.Home,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(28.dp),
+                    )
                     Spacer(modifier = Modifier.size(12.dp))
                     Column {
-                Text(
-                    text = "Primary home",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White,
-                )
-                Text(
-                    text = state.selectedFloor?.name ?: "No floor selected",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.82f),
-                )
+                        Text(
+                            text = "Primary home",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Text(
+                            text = state.selectedFloor?.name ?: "No floor selected",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                        )
                     }
                 }
 
-                TextButton(onClick = onSignOut) {
-                    Text("Sign out", color = Color.White)
+                TextButton(onClick = { selectedTab = 2 }) {
+                    Icon(
+                        SmartHomeIcons.Profile,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text("Profile", color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         PrimaryTabRow(selectedTabIndex = selectedTab) {
             Tab(
@@ -335,112 +366,172 @@ private fun OutletDashboard(
                 text = { Text("Layout") },
                 icon = { Icon(SmartHomeIcons.Layout, contentDescription = null) },
             )
+            Tab(
+                selected = selectedTab == 2,
+                onClick = { selectedTab = 2 },
+                text = { Text("Profile") },
+                icon = { Icon(SmartHomeIcons.Profile, contentDescription = null) },
+            )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         if (selectedTab == 0) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SummaryTile(
-                label = "Online",
-                value = state.devices.count { it.reportedStatus != DeviceStatus.DISCONNECTED }.toString(),
-                icon = SmartHomeIcons.Devices,
-                modifier = Modifier.weight(1f),
-            )
-            SummaryTile(
-                label = "Active",
-                value = state.devices.count { it.reportedStatus == DeviceStatus.ON }.toString(),
-                icon = SmartHomeIcons.Power,
-                modifier = Modifier.weight(1f),
-            )
-            SummaryTile(
-                label = "Alerts",
-                value = state.alerts.size.toString(),
-                icon = SmartHomeIcons.Warning,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-        if (state.isLoadingAlerts || state.alerts.isNotEmpty()) {
-            Text(
-                text = "Safety alerts",
-                style = MaterialTheme.typography.titleLarge,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SummaryTile(
+                    label = "Online",
+                    value = state.devices.count { it.reportedStatus != DeviceStatus.DISCONNECTED }.toString(),
+                    icon = SmartHomeIcons.Devices,
+                    modifier = Modifier.weight(1f),
+                )
+                SummaryTile(
+                    label = "Active",
+                    value = state.devices.count { it.reportedStatus == DeviceStatus.ON }.toString(),
+                    icon = SmartHomeIcons.Power,
+                    modifier = Modifier.weight(1f),
+                )
+                SummaryTile(
+                    label = "Alerts",
+                    value = state.alerts.size.toString(),
+                    icon = SmartHomeIcons.Warning,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                items(filters) { filter ->
+                    FilterChip(
+                        selected = selectedFilter == filter,
+                        onClick = { selectedFilter = filter },
+                        label = { Text(filter) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (state.isLoadingAlerts || state.alerts.isNotEmpty()) {
+                Text(
+                    text = "Safety alerts",
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                if (state.isLoadingAlerts) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                } else {
+                    state.alerts.take(3).forEach { alert ->
+                        AlertCard(
+                            alert = alert,
+                            deviceName = state.devices.firstOrNull { it.id == alert.deviceId }?.name,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = "Your devices",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = "Monitor confirmed state and send power commands.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
-            if (state.isLoadingAlerts) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            } else {
-                state.alerts.take(3).forEach { alert ->
-                    AlertCard(
-                        alert = alert,
-                        deviceName = state.devices.firstOrNull { it.id == alert.deviceId }?.name,
+
+            when {
+                state.isLoadingDevices -> {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Loading devices…")
+                }
+
+                filteredDevices.isEmpty() -> {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Icon(
+                                SmartHomeIcons.Devices,
+                                contentDescription = null,
+                                modifier = Modifier.size(40.dp),
+                                tint = MaterialTheme.colorScheme.secondary,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (selectedFilter == "All") "No devices yet. Add one from the Layout tab." else "No devices matching '$selectedFilter'.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                }
+
+                else -> filteredDevices.forEach { device ->
+                    val floorName = state.floors.firstOrNull { it.id == device.floorId }?.name
+                        ?: "Unknown floor"
+                    val roomName = state.rooms
+                        .takeIf { device.floorId == state.selectedFloorId }
+                        ?.firstOrNull { it.id == device.roomId }
+                        ?.name
+                    DeviceSummaryCard(
+                        device = device,
+                        locationLabel = listOfNotNull(floorName, roomName).joinToString(" · "),
+                        commandsInFlight = state.switchCommandsInFlight,
+                        deviceCommandsInFlight = state.deviceCommandsInFlight,
+                        onSwitchChannelStateRequested = onSwitchChannelStateRequested,
+                        onDevicePowerStateRequested = onDevicePowerStateRequested,
+                        onEditSchedule = { scheduleDevice = device },
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-
-        Text(
-            text = "Your devices",
-            style = MaterialTheme.typography.titleLarge,
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Monitor confirmed state and send power commands.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        when {
-            state.isLoadingDevices -> {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Loading devices…")
-            }
-
-            state.devices.isEmpty() -> Text("No devices yet. Add one from the Layout tab.")
-
-            else -> state.devices.forEach { device ->
-                val floorName = state.floors.firstOrNull { it.id == device.floorId }?.name
-                    ?: "Unknown floor"
-                val roomName = state.rooms
-                    .takeIf { device.floorId == state.selectedFloorId }
-                    ?.firstOrNull { it.id == device.roomId }
-                    ?.name
-                DeviceSummaryCard(
-                    device = device,
-                    locationLabel = listOfNotNull(floorName, roomName).joinToString(" · "),
-                    commandsInFlight = state.switchCommandsInFlight,
-                    deviceCommandsInFlight = state.deviceCommandsInFlight,
-                    onSwitchChannelStateRequested = onSwitchChannelStateRequested,
-                    onDevicePowerStateRequested = onDevicePowerStateRequested,
-                    onEditSchedule = { scheduleDevice = device },
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
+        } else if (selectedTab == 1) {
+            FloorDashboardSection(
+                state = state,
+                onFloorSelected = onFloorSelected,
+                onFloorCreated = onFloorCreated,
+                onRoomCreated = onRoomCreated,
+                onFloorDeleted = onFloorDeleted,
+                onRoomDeleted = onRoomDeleted,
+                onFloorUpdated = onFloorUpdated,
+                onRoomUpdated = onRoomUpdated,
+                onOutletPlaced = onOutletPlaced,
+                onDeviceCreated = onDeviceCreated,
+                onDeviceMoved = onDeviceMoved,
+                onDeviceDeleted = onDeviceDeleted,
+            )
         } else {
-
-        FloorDashboardSection(
-            state = state,
-            onFloorSelected = onFloorSelected,
-            onFloorCreated = onFloorCreated,
-            onRoomCreated = onRoomCreated,
-            onFloorDeleted = onFloorDeleted,
-            onRoomDeleted = onRoomDeleted,
-            onFloorUpdated = onFloorUpdated,
-            onRoomUpdated = onRoomUpdated,
-            onOutletPlaced = onOutletPlaced,
-            onDeviceCreated = onDeviceCreated,
-            onDeviceMoved = onDeviceMoved,
-            onDeviceDeleted = onDeviceDeleted,
-        )
+            ProfileSection(
+                email = state.accountEmail ?: state.email.takeIf(String::isNotBlank),
+                onSignOut = onSignOut,
+            )
         }
 
         state.errorMessage?.let { message ->
@@ -572,6 +663,7 @@ private fun DeviceSummaryCard(
                 is DeviceConfiguration.Camera -> "Mock camera media configured"
             }
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            if (device.profile == DeviceProfile.CAMERA) CameraSnapshot(device)
             val supportsCommonPower = device.profile in setOf(
                 DeviceProfile.OUTLET,
                 DeviceProfile.SAFETY_OUTLET,
@@ -656,6 +748,157 @@ private fun DeviceSummaryCard(
                         },
                         enabled = key !in commandsInFlight && device.reportedStatus.acceptsPowerCommands,
                     )
+                }
+            }
+        }
+    }
+}
+
+private enum class CameraLoadState { LOADING, SUCCESS, ERROR }
+
+@Composable
+private fun CameraSnapshot(device: SmartDevice) {
+    val configuration = device.configuration as? DeviceConfiguration.Camera ?: return
+    var loadState by remember(configuration.mediaUri) { mutableStateOf(CameraLoadState.LOADING) }
+
+    Spacer(modifier = Modifier.height(12.dp))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .background(Color(0xFF0F172A), RoundedCornerShape(12.dp)),
+    ) {
+        AsyncImage(
+            model = configuration.mediaUri,
+            contentDescription = "Mock camera snapshot from ${device.name}",
+            contentScale = ContentScale.Crop,
+            onLoading = { loadState = CameraLoadState.LOADING },
+            onSuccess = { loadState = CameraLoadState.SUCCESS },
+            onError = { loadState = CameraLoadState.ERROR },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        if (loadState != CameraLoadState.SUCCESS) {
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (loadState == CameraLoadState.LOADING) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        color = Color(0xFF38BDF8),
+                        strokeWidth = 3.dp,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Loading mock snapshot…", color = Color(0xFFCBD5E1))
+                } else {
+                    Icon(
+                        SmartHomeIcons.Camera,
+                        contentDescription = null,
+                        tint = Color(0xFFF87171),
+                        modifier = Modifier.size(36.dp),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Snapshot unavailable", color = Color(0xFFFECACA))
+                }
+            }
+        }
+
+        Surface(
+            color = Color(0xCC000000),
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(10.dp),
+        ) {
+            Text(
+                "MOCK SNAPSHOT",
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+            )
+        }
+
+        Text(
+            text = when (loadState) {
+                CameraLoadState.LOADING -> "LOADING"
+                CameraLoadState.SUCCESS -> "AVAILABLE"
+                CameraLoadState.ERROR -> "ERROR"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(10.dp)
+                .background(Color(0xCC000000), RoundedCornerShape(4.dp))
+                .padding(horizontal = 7.dp, vertical = 3.dp),
+        )
+    }
+}
+
+@Composable
+private fun ProfileSection(
+    email: String?,
+    onSignOut: () -> Unit,
+) {
+    val accountLabel = email ?: "Authenticated account"
+    val initial = accountLabel.firstOrNull()?.uppercase() ?: "U"
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Profile", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Manage the account connected to this home.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.size(56.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            initial,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.size(16.dp))
+                Column {
+                    Text("Home member", style = MaterialTheme.typography.titleMedium)
+                    Text(accountLabel, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text("Session", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    "Your Firebase Authentication session protects access to home data and controls.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = onSignOut,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Sign out")
                 }
             }
         }

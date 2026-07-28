@@ -1,6 +1,6 @@
 # Implementation Status
 
-Status date: 2026-07-25
+Status date: 2026-07-28
 
 ## Verified implementation
 
@@ -35,6 +35,10 @@ Status date: 2026-07-25
 - Light schedule editor with 24-hour time, IANA timezone, overnight-window support, and role-restricted
   Firestore updates.
 - Timezone-aware scheduled light evaluator implemented for local Functions verification.
+- Filterable device dashboard, accessible status-aware floor markers, and responsive launcher artwork.
+- Dedicated Profile tab with the authenticated email and sign-out moved out of the home header.
+- HTTPS mock camera snapshot rendering with honest mock labeling, loading feedback, failure fallback,
+  content description, memory caching, and disk caching through Coil.
 
 ## Current verification evidence
 
@@ -42,6 +46,7 @@ Status date: 2026-07-25
 | --- | --- |
 | Android domain/ViewModel | 26 passing JUnit tests |
 | Android packaging | `:app:assembleDebug` succeeds |
+| Android static analysis | `:app:lintDebug` succeeds with 0 errors |
 | Firestore authorization/schema | 33 passing emulator-backed Vitest tests |
 | Cloud Functions | TypeScript build and 8 Vitest decision tests pass |
 | Simulator | TypeScript typecheck, Oxlint, and Vite production build succeed |
@@ -58,11 +63,11 @@ Status date: 2026-07-25
 
 - Touch resize/move for existing rooms; device movement currently uses a coordinate form after tapping.
 - Editing an existing safety duration and production deployment of the verified cutoff functions.
-- Camera snapshot rendering/upload and optional second-phone camera node.
+- Camera upload and optional second-phone camera node; URI snapshot rendering is complete.
 - Executing the seed against a target environment still requires owner credentials exported locally.
 - Activity reporting, offline demonstration, CI, and signed release packaging.
 
 ## Active branch
 
-`feature/device-dashboard` contains the device-dashboard and direct-manipulation work. It remains
-separate from `develop` until physical acceptance and simulator compatibility are complete.
+`feature/ui-ux-overhaul` contains the visual refinement, profile navigation, launcher, accessibility,
+and mock-camera work. It remains separate until physical acceptance is complete.

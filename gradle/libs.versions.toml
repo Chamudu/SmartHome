@@ -8,6 +8,7 @@ compose-bom = "2026.06.00"
 activity-compose = "1.13.0"
 lifecycle = "2.10.0"
 junit4 = "4.13.2"
+coil = "2.7.0"
 
 [libraries]
 androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
@@ -29,6 +30,7 @@ androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4
 androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 junit4 = { module = "junit:junit", version.ref = "junit4" }
+coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 
 [plugins]
 google-services = { id = "com.google.gms.google-services", version.ref = "google-services" }

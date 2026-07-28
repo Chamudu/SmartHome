@@ -30,6 +30,9 @@ class FirebaseOutletRepository(
     override val hasAuthenticatedUser: Boolean
         get() = authentication.currentUser != null
 
+    override val authenticatedUserEmail: String?
+        get() = authentication.currentUser?.email
+
     override suspend fun signIn(
         email: String,
         password: String,

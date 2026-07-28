@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface OutletRepository {
     val hasAuthenticatedUser: Boolean
+    val authenticatedUserEmail: String?
 
     suspend fun signIn(
         email: String,

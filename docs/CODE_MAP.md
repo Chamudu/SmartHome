@@ -24,14 +24,14 @@ Compose event
 | `HomeAlert.kt` | Persistent alert identity, severity, message, related device, and trusted timestamp |
 | `FloorPlan.kt` | Floor, conventional level-derived names, half-open room rectangles, edges, and violations |
 | `FloorLayoutValidator.kt` | Pure floor, room, overlap, and device-coordinate validation |
-| `OutletRepository.kt` | Authentication, device/alert observation, creation, control, scheduling, and placement boundary |
+| `OutletRepository.kt` | Authenticated account identity, device/alert observation, control, scheduling, and placement boundary |
 | `FloorRepository.kt` | Floor and room observation and mutation boundary |
 | `FirebaseOutletRepository.kt` | Firebase Auth, device/alert listeners, mapping, creation, commands, and placement |
 | `FirebaseFloorRepository.kt` | Floor/room listeners, mapping, writes, deletion reference checks, and batch cascade |
 | `OutletViewModel.kt` | Screen state, listener lifecycle, validation, selection, and user-action orchestration |
-| `OutletScreen.kt` | Authentication, visual dashboard, Devices/Layout navigation, controls, and schedule editor |
+| `OutletScreen.kt` | Authentication, Devices/Layout/Profile navigation, filters, controls, snapshot, and schedule UI |
 | `FloorDashboardSection.kt` | Floor selector/grid, gestures, previews, CRUD dialogs, and Add Device form |
-| `Theme.kt` | Branded light/dark Material 3 color schemes |
+| `Theme.kt` | Branded Material 3 schemes and active-scheme-aware semantic status colors |
 | `SmartHomeIcons.kt` | Small dependency-free vector icon set for navigation, profiles, status, and scheduling |
 
 ## Simulator responsibilities

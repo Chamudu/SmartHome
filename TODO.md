@@ -33,14 +33,14 @@ completed items should remain checked for release traceability.
 - [x] Add in-app creation and initial configuration for every supported device profile.
 - [x] Apply a cohesive Material 3 theme and semantic status styling.
 - [x] Separate daily device control from floor editing with task-focused dashboard tabs.
-- [ ] Verify 48 dp targets, screen-reader semantics, font scaling, and light/dark themes.
+- [ ] Complete physical verification of 48 dp targets, screen-reader semantics, font scaling, and themes.
 - [x] Implement independent control and simulator reporting for variable-channel switch units.
 - [x] Implement initial safety-critical device duration configuration.
 - [x] Implement and locally verify the trusted maximum-duration cutoff.
 - [x] Implement scheduled light configuration and a timezone-aware backend evaluator.
 - [x] Implement persistent realtime safety-alert display.
 - [ ] Add complete alert history and per-user read acknowledgement.
-- [ ] Implement mock camera snapshots or stream links.
+- [x] Implement HTTPS mock camera snapshots with loading and failure states.
 - [ ] Implement event history and basic usage reporting.
 - [ ] Support error, disconnected, loading, empty, and offline UI states.
 

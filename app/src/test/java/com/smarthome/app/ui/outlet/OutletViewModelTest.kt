@@ -85,6 +85,7 @@ class OutletViewModelTest {
 
             assertEquals("owner@smarthome.test", repository.signedInEmail)
             assertTrue(viewModel.uiState.value.isAuthenticated)
+            assertEquals("owner@smarthome.test", viewModel.uiState.value.accountEmail)
             assertEquals("", viewModel.uiState.value.password)
 
             repository.emit(outlet())
@@ -514,6 +515,8 @@ private data class LightScheduleRequest(
 private class FakeOutletRepository(
     override var hasAuthenticatedUser: Boolean = false,
 ) : OutletRepository {
+    override val authenticatedUserEmail: String?
+        get() = signedInEmail
     private val outlets = MutableSharedFlow<OutletDevice>(replay = 1)
     private val devices = MutableSharedFlow<List<SmartDevice>>(replay = 1)
     private val alerts = MutableSharedFlow<List<HomeAlert>>(replay = 1)
