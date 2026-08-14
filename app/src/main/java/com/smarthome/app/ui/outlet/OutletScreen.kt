@@ -270,6 +270,18 @@ private fun OutletDashboard(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var scheduleDevice by remember { mutableStateOf<SmartDevice?>(null) }
+    var lastReadSafetyAlertTime by rememberSaveable { androidx.compose.runtime.mutableLongStateOf(0L) }
+
+    androidx.compose.runtime.LaunchedEffect(selectedTab, state.reportAlerts) {
+        if (selectedTab == 3) {
+            val maxTime = state.reportAlerts
+                .filter { it.severity == com.smarthome.app.domain.model.AlertSeverity.CRITICAL }
+                .maxOfOrNull { it.createdAtMillis } ?: 0L
+            if (maxTime > lastReadSafetyAlertTime) {
+                lastReadSafetyAlertTime = maxTime
+            }
+        }
+    }
 
     scheduleDevice?.let { device ->
         LightScheduleDialog(
@@ -376,7 +388,18 @@ private fun OutletDashboard(
                 selected = selectedTab == 3,
                 onClick = { selectedTab = 3 },
                 text = { Text("Safety") },
-                icon = { Icon(SmartHomeIcons.Safety, contentDescription = null) },
+                icon = { 
+                    val criticalCount = state.reportAlerts.count { it.severity == com.smarthome.app.domain.model.AlertSeverity.CRITICAL && it.createdAtMillis > lastReadSafetyAlertTime }
+                    if (criticalCount > 0) {
+                        androidx.compose.material3.BadgedBox(
+                            badge = { androidx.compose.material3.Badge { Text(criticalCount.toString()) } }
+                        ) {
+                            Icon(SmartHomeIcons.Safety, contentDescription = null)
+                        }
+                    } else {
+                        Icon(SmartHomeIcons.Safety, contentDescription = null)
+                    }
+                },
             )
             Tab(
                 selected = selectedTab == 4,
@@ -403,12 +426,6 @@ private fun OutletDashboard(
                     label = "Active",
                     value = state.devices.count { it.reportedStatus == DeviceStatus.ON }.toString(),
                     icon = SmartHomeIcons.Power,
-                    modifier = Modifier.weight(1f),
-                )
-                SummaryTile(
-                    label = "Alerts",
-                    value = state.alerts.size.toString(),
-                    icon = SmartHomeIcons.Warning,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -523,13 +540,14 @@ private fun OutletDashboard(
             )
         } else if (selectedTab == 2) {
             ReportSection(
-                reportAlerts = state.reportAlerts,
+                reportAlerts = state.reportAlerts.filter { it.severity == com.smarthome.app.domain.model.AlertSeverity.INFO },
                 devices = state.devices,
                 isLoading = state.isLoadingReport,
             )
         } else if (selectedTab == 3) {
             SafetySection(
                 reportAlerts = state.reportAlerts.filter { it.severity == com.smarthome.app.domain.model.AlertSeverity.CRITICAL },
+                devices = state.devices,
                 isLoading = state.isLoadingReport,
             )
         } else {
@@ -580,7 +598,7 @@ private fun AlertCard(
     val containerColor = when (alert.severity) {
         AlertSeverity.CRITICAL -> MaterialTheme.colorScheme.errorContainer
         AlertSeverity.WARNING -> MaterialTheme.colorScheme.tertiaryContainer
-        AlertSeverity.INFO -> MaterialTheme.colorScheme.secondaryContainer
+        AlertSeverity.INFO -> MaterialTheme.colorScheme.surfaceVariant
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1156,25 +1174,6 @@ private fun ReportSection(
     val devicesWithActivity = countByDevice.size
     val totalEvents = reportAlerts.size
 
-    // Summary tiles
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        ReportStatTile(
-            label = "Total events",
-            value = totalEvents.toString(),
-            icon = SmartHomeIcons.Report,
-            modifier = Modifier.weight(1f),
-        )
-        ReportStatTile(
-            label = "Devices active",
-            value = devicesWithActivity.toString(),
-            icon = SmartHomeIcons.Devices,
-            modifier = Modifier.weight(1f),
-        )
-    }
-
     Spacer(modifier = Modifier.height(20.dp))
 
     Text(
@@ -1366,6 +1365,7 @@ private fun DeviceActivityRow(
 @Composable
 private fun SafetySection(
     reportAlerts: List<com.smarthome.app.domain.model.HomeAlert>,
+    devices: List<SmartDevice>,
     isLoading: Boolean,
 ) {
     if (isLoading) {
@@ -1400,21 +1400,12 @@ private fun SafetySection(
                 }
             }
         } else {
-            // Placeholder for teammate to implement the alert history list!
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(SmartHomeIcons.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Text("Teammate: Implement Alert History List Here", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Text("There are  critical alerts waiting.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                }
+            reportAlerts.sortedByDescending { it.createdAtMillis }.forEach { alert ->
+                AlertCard(
+                    alert = alert,
+                    deviceName = devices.firstOrNull { it.id == alert.deviceId }?.name,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
