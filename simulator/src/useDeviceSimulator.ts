@@ -8,6 +8,7 @@ import {
 import {
   collection,
   doc,
+  addDoc,
   onSnapshot,
   runTransaction,
   serverTimestamp,
@@ -25,6 +26,7 @@ export function useDeviceSimulator() {
   const [authBusy, setAuthBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const acknowledgements = useRef(new Set<string>())
+  const safetyTimers = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
     if (!auth) return
@@ -69,6 +71,14 @@ export function useDeviceSimulator() {
               'reported.errorCode': null,
               commandState: 'APPLIED',
               updatedAt: serverTimestamp(),
+            }).then(() => {
+              void addDoc(collection(db!, 'homes', homeId!, 'alerts'), {
+                deviceId: device.id,
+                type: 'APP_TOGGLE',
+                severity: 'INFO',
+                message: `Device switched ${device.desired.status} via app.`,
+                createdAt: serverTimestamp()
+              })
             }).catch((cause: unknown) => {
               acknowledgements.current.delete(acknowledgementKey)
               setError(toMessage(cause))
@@ -89,6 +99,39 @@ export function useDeviceSimulator() {
               setError(toMessage(cause))
             })
           })
+
+          // Client-side simulation of Safety Cutoff
+          if (device.profile === 'SAFETY_OUTLET' && 'maxOnDurationSeconds' in device.config) {
+            const config = device.config as { maxOnDurationSeconds: number }
+            const maxDurationMs = config.maxOnDurationSeconds * 1000
+            if (device.reported.status === 'ON') {
+              if (!safetyTimers.current.has(device.id)) {
+                const timerId = window.setTimeout(() => {
+                  safetyTimers.current.delete(device.id)
+                  void updateDoc(doc(devicesReference, device.id), {
+                    'reported.status': 'OFF',
+                    'desired.status': 'OFF',
+                    'reported.updatedAt': serverTimestamp(),
+                    commandState: 'IDLE',
+                    updatedAt: serverTimestamp()
+                  })
+                  void addDoc(collection(db!, 'homes', homeId!, 'alerts'), {
+                    deviceId: device.id,
+                    type: 'SAFETY_CUTOFF',
+                    severity: 'CRITICAL',
+                    message: `${device.name} exceeded maximum ON duration of ${config.maxOnDurationSeconds}s. Automatically powered off.`,
+                    createdAt: serverTimestamp()
+                  })
+                }, maxDurationMs)
+                safetyTimers.current.set(device.id, timerId)
+              }
+            } else {
+              if (safetyTimers.current.has(device.id)) {
+                clearTimeout(safetyTimers.current.get(device.id))
+                safetyTimers.current.delete(device.id)
+              }
+            }
+          }
         })
       },
       (cause) => {
@@ -132,6 +175,13 @@ export function useDeviceSimulator() {
         commandState: 'IDLE',
         updatedAt: serverTimestamp(),
       })
+      await addDoc(collection(db, 'homes', homeId, 'alerts'), {
+        deviceId,
+        type: 'MANUAL_TOGGLE',
+        severity: 'INFO',
+        message: `Device manually switched ${status}.`,
+        createdAt: serverTimestamp()
+      })
     } catch (cause) {
       setError(toMessage(cause))
     } finally {
@@ -166,6 +216,17 @@ export function useDeviceSimulator() {
           throw new Error('Switch channel does not exist.')
         }
         transaction.update(reference, { 'config.channels': channels, updatedAt: serverTimestamp() })
+        const current = channels.find(c => c.id === channelId)
+        if (current) {
+          const alertRef = doc(collection(db!, 'homes', homeId!, 'alerts'))
+          transaction.set(alertRef, {
+            deviceId: device.id,
+            type: 'MANUAL_TOGGLE',
+            severity: 'INFO',
+            message: `${current.name} manually switched ${status}.`,
+            createdAt: serverTimestamp()
+          })
+        }
       })
     } catch (cause) {
       setError(toMessage(cause))
@@ -211,6 +272,14 @@ async function acknowledgeSwitchChannel(
         ? { ...channel, reportedStatus: channel.desiredStatus }
         : channel)
     transaction.update(reference, { 'config.channels': channels, updatedAt: serverTimestamp() })
+    const alertRef = doc(collection(db!, 'homes', homeId!, 'alerts'))
+    transaction.set(alertRef, {
+      deviceId: device.id,
+      type: 'APP_TOGGLE',
+      severity: 'INFO',
+      message: `${current.name} switched ${current.desiredStatus} via app.`,
+      createdAt: serverTimestamp()
+    })
   })
 }
 

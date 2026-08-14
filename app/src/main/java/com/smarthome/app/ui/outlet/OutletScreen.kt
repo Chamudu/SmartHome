@@ -369,12 +369,18 @@ private fun OutletDashboard(
             Tab(
                 selected = selectedTab == 2,
                 onClick = { selectedTab = 2 },
-                text = { Text("Reports") },
+                text = { Text("Activity") },
                 icon = { Icon(SmartHomeIcons.Report, contentDescription = null) },
             )
             Tab(
                 selected = selectedTab == 3,
                 onClick = { selectedTab = 3 },
+                text = { Text("Safety") },
+                icon = { Icon(SmartHomeIcons.Safety, contentDescription = null) },
+            )
+            Tab(
+                selected = selectedTab == 4,
+                onClick = { selectedTab = 4 },
                 text = { Text("Profile") },
                 icon = { Icon(SmartHomeIcons.Profile, contentDescription = null) },
             )
@@ -428,25 +434,7 @@ private fun OutletDashboard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (state.isLoadingAlerts || state.alerts.isNotEmpty()) {
-                Text(
-                    text = "Safety alerts",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                if (state.isLoadingAlerts) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    state.alerts.take(3).forEach { alert ->
-                        AlertCard(
-                            alert = alert,
-                            deviceName = state.devices.firstOrNull { it.id == alert.deviceId }?.name,
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
+
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -537,6 +525,11 @@ private fun OutletDashboard(
             ReportSection(
                 reportAlerts = state.reportAlerts,
                 devices = state.devices,
+                isLoading = state.isLoadingReport,
+            )
+        } else if (selectedTab == 3) {
+            SafetySection(
+                reportAlerts = state.reportAlerts.filter { it.severity == com.smarthome.app.domain.model.AlertSeverity.CRITICAL },
                 isLoading = state.isLoadingReport,
             )
         } else {
@@ -702,7 +695,11 @@ private fun DeviceSummaryCard(
                         Text(unavailableReason, style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(
-                        checked = device.desiredStatus == PowerState.ON,
+                        checked = if (device.commandState == com.smarthome.app.domain.model.CommandState.PENDING) {
+                            device.desiredStatus == PowerState.ON
+                        } else {
+                            device.reportedStatus == DeviceStatus.ON
+                        },
                         onCheckedChange = { enabled ->
                             onDevicePowerStateRequested(
                                 device.id,
@@ -750,7 +747,11 @@ private fun DeviceSummaryCard(
                     }
                     val key = "${device.id}:${channel.id}"
                     Switch(
-                        checked = channel.desiredStatus == PowerState.ON,
+                        checked = if (channel.isPending) {
+                            channel.desiredStatus == PowerState.ON
+                        } else {
+                            channel.reportedStatus == DeviceStatus.ON
+                        },
                         onCheckedChange = { enabled ->
                             onSwitchChannelStateRequested(
                                 device.id,
@@ -1152,10 +1153,8 @@ private fun ReportSection(
         .groupBy { it.deviceId }
         .mapValues { entry -> entry.value.maxOf { it.createdAtMillis } }
 
-    val safetyAlerts = reportAlerts.count { it.type == "SAFETY_CUTOFF" }
     val devicesWithActivity = countByDevice.size
     val totalEvents = reportAlerts.size
-    val maxCount = countByDevice.values.maxOrNull()?.coerceAtLeast(1) ?: 1
 
     // Summary tiles
     Row(
@@ -1174,29 +1173,23 @@ private fun ReportSection(
             icon = SmartHomeIcons.Devices,
             modifier = Modifier.weight(1f),
         )
-        ReportStatTile(
-            label = "Safety cutoffs",
-            value = safetyAlerts.toString(),
-            icon = SmartHomeIcons.Safety,
-            modifier = Modifier.weight(1f),
-        )
     }
 
     Spacer(modifier = Modifier.height(20.dp))
 
     Text(
-        text = "Device activity",
+        text = "Activity Log",
         style = MaterialTheme.typography.titleLarge,
     )
     Text(
-        text = "Events recorded per device",
+        text = "Chronological history of your home.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
     )
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    if (countByDevice.isEmpty()) {
+    if (reportAlerts.isEmpty()) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -1214,50 +1207,23 @@ private fun ReportSection(
                     tint = MaterialTheme.colorScheme.secondary,
                 )
                 Text(
-                    text = "No activity recorded yet.",
+                    text = "No standard activity recorded yet.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    text = "Turn on a safety device to generate events.",
+                    text = "Toggle a device to generate events.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )
             }
         }
     } else {
-        // Sort devices by event count descending
-        val sortedDevices = devices
-            .filter { countByDevice.containsKey(it.id) }
-            .sortedByDescending { countByDevice[it.id] ?: 0 }
-
-        // Also include device IDs from alerts that may no longer be in devices list
-        val unknownIds = countByDevice.keys - devices.map { it.id }.toSet()
-
-        sortedDevices.forEach { device ->
-            val count = countByDevice[device.id] ?: 0
-            val lastSeen = lastSeenByDevice[device.id]
-            DeviceActivityRow(
-                name = device.name,
-                profile = device.profile,
-                eventCount = count,
-                maxCount = maxCount,
-                lastSeenMillis = lastSeen,
+        reportAlerts.sortedByDescending { it.createdAtMillis }.forEach { alert ->
+            AlertCard(
+                alert = alert,
+                deviceName = devices.firstOrNull { it.id == alert.deviceId }?.name,
             )
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        // Fallback rows for deleted/unknown devices
-        unknownIds.forEach { deviceId ->
-            val count = countByDevice[deviceId] ?: 0
-            val lastSeen = lastSeenByDevice[deviceId]
-            DeviceActivityRow(
-                name = "Deleted device",
-                profile = null,
-                eventCount = count,
-                maxCount = maxCount,
-                lastSeenMillis = lastSeen,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 }
@@ -1392,6 +1358,63 @@ private fun DeviceActivityRow(
                             shape = RoundedCornerShape(3.dp),
                         ),
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SafetySection(
+    reportAlerts: List<com.smarthome.app.domain.model.HomeAlert>,
+    isLoading: Boolean,
+) {
+    if (isLoading) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Safety Overview", style = MaterialTheme.typography.titleLarge)
+        Text("Recent critical cutoffs and offline hardware alerts.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (reportAlerts.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(SmartHomeIcons.Safety, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("No safety issues reported recently.", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        } else {
+            // Placeholder for teammate to implement the alert history list!
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(SmartHomeIcons.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("Teammate: Implement Alert History List Here", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("There are  critical alerts waiting.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
             }
         }
     }
