@@ -339,7 +339,7 @@ private fun OutletDashboard(
                     }
                 }
 
-                TextButton(onClick = { selectedTab = 2 }) {
+                TextButton(onClick = { selectedTab = 3 }) {
                     Icon(
                         SmartHomeIcons.Profile,
                         contentDescription = null,
@@ -369,6 +369,12 @@ private fun OutletDashboard(
             Tab(
                 selected = selectedTab == 2,
                 onClick = { selectedTab = 2 },
+                text = { Text("Reports") },
+                icon = { Icon(SmartHomeIcons.Report, contentDescription = null) },
+            )
+            Tab(
+                selected = selectedTab == 3,
+                onClick = { selectedTab = 3 },
                 text = { Text("Profile") },
                 icon = { Icon(SmartHomeIcons.Profile, contentDescription = null) },
             )
@@ -526,6 +532,12 @@ private fun OutletDashboard(
                 onDeviceCreated = onDeviceCreated,
                 onDeviceMoved = onDeviceMoved,
                 onDeviceDeleted = onDeviceDeleted,
+            )
+        } else if (selectedTab == 2) {
+            ReportSection(
+                reportAlerts = state.reportAlerts,
+                devices = state.devices,
+                isLoading = state.isLoadingReport,
             )
         } else {
             ProfileSection(
@@ -1102,5 +1114,285 @@ private fun StatusRow(
             text = value,
             style = MaterialTheme.typography.labelLarge,
         )
+    }
+}
+
+// ── Reports Tab ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun ReportSection(
+    reportAlerts: List<HomeAlert>,
+    devices: List<SmartDevice>,
+    isLoading: Boolean,
+) {
+    if (isLoading) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator()
+            Text(
+                text = "Loading activity data…",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        return
+    }
+
+    // Count alerts per device
+    val countByDevice: Map<String, Int> = reportAlerts
+        .groupBy { it.deviceId }
+        .mapValues { it.value.size }
+
+    // Most recent alert timestamp per device
+    val lastSeenByDevice: Map<String, Long> = reportAlerts
+        .groupBy { it.deviceId }
+        .mapValues { entry -> entry.value.maxOf { it.createdAtMillis } }
+
+    val safetyAlerts = reportAlerts.count { it.type == "SAFETY_CUTOFF" }
+    val devicesWithActivity = countByDevice.size
+    val totalEvents = reportAlerts.size
+    val maxCount = countByDevice.values.maxOrNull()?.coerceAtLeast(1) ?: 1
+
+    // Summary tiles
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ReportStatTile(
+            label = "Total events",
+            value = totalEvents.toString(),
+            icon = SmartHomeIcons.Report,
+            modifier = Modifier.weight(1f),
+        )
+        ReportStatTile(
+            label = "Devices active",
+            value = devicesWithActivity.toString(),
+            icon = SmartHomeIcons.Devices,
+            modifier = Modifier.weight(1f),
+        )
+        ReportStatTile(
+            label = "Safety cutoffs",
+            value = safetyAlerts.toString(),
+            icon = SmartHomeIcons.Safety,
+            modifier = Modifier.weight(1f),
+        )
+    }
+
+    Spacer(modifier = Modifier.height(20.dp))
+
+    Text(
+        text = "Device activity",
+        style = MaterialTheme.typography.titleLarge,
+    )
+    Text(
+        text = "Events recorded per device",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+    )
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    if (countByDevice.isEmpty()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    SmartHomeIcons.Report,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+                Text(
+                    text = "No activity recorded yet.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = "Turn on a safety device to generate events.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+            }
+        }
+    } else {
+        // Sort devices by event count descending
+        val sortedDevices = devices
+            .filter { countByDevice.containsKey(it.id) }
+            .sortedByDescending { countByDevice[it.id] ?: 0 }
+
+        // Also include device IDs from alerts that may no longer be in devices list
+        val unknownIds = countByDevice.keys - devices.map { it.id }.toSet()
+
+        sortedDevices.forEach { device ->
+            val count = countByDevice[device.id] ?: 0
+            val lastSeen = lastSeenByDevice[device.id]
+            DeviceActivityRow(
+                name = device.name,
+                profile = device.profile,
+                eventCount = count,
+                maxCount = maxCount,
+                lastSeenMillis = lastSeen,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        // Fallback rows for deleted/unknown devices
+        unknownIds.forEach { deviceId ->
+            val count = countByDevice[deviceId] ?: 0
+            val lastSeen = lastSeenByDevice[deviceId]
+            DeviceActivityRow(
+                name = "Deleted device",
+                profile = null,
+                eventCount = count,
+                maxCount = maxCount,
+                lastSeenMillis = lastSeen,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+    }
+}
+
+@Composable
+private fun ReportStatTile(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                value,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeviceActivityRow(
+    name: String,
+    profile: DeviceProfile?,
+    eventCount: Int,
+    maxCount: Int,
+    lastSeenMillis: Long?,
+) {
+    val glyph = when (profile) {
+        DeviceProfile.OUTLET -> "◉"
+        DeviceProfile.MULTI_SWITCH -> "≡"
+        DeviceProfile.SAFETY_OUTLET -> "⚠"
+        DeviceProfile.LIGHT -> "✦"
+        DeviceProfile.CAMERA -> "▣"
+        null -> "?"
+    }
+    val barFraction = (eventCount.toFloat() / maxCount.toFloat()).coerceIn(0f, 1f)
+    val lastSeenText = lastSeenMillis?.let {
+        val diff = System.currentTimeMillis() - it
+        when {
+            diff < 60_000L -> "Just now"
+            diff < 3_600_000L -> "${diff / 60_000L}m ago"
+            diff < 86_400_000L -> "${diff / 3_600_000L}h ago"
+            else -> "${diff / 86_400_000L}d ago"
+        }
+    } ?: "—"
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = glyph,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.size(10.dp))
+                    Column {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            text = profile?.displayName ?: "Unknown",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "$eventCount event${if (eventCount != 1) "s" else ""}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = lastSeenText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Activity bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(3.dp),
+                    ),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(barFraction)
+                        .height(6.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(3.dp),
+                        ),
+                )
+            }
+        }
     }
 }

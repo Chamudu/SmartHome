@@ -46,6 +46,8 @@ data class OutletUiState(
     val scheduleUpdatesInFlight: Set<String> = emptySet(),
     val alerts: List<HomeAlert> = emptyList(),
     val isLoadingAlerts: Boolean = false,
+    val reportAlerts: List<HomeAlert> = emptyList(),
+    val isLoadingReport: Boolean = false,
     val errorMessage: String? = null,
     val floors: List<FloorPlan> = emptyList(),
     val selectedFloorId: String? = null,
@@ -77,6 +79,7 @@ class OutletViewModel(
     private var outletObservation: Job? = null
     private var deviceObservation: Job? = null
     private var alertObservation: Job? = null
+    private var reportAlertObservation: Job? = null
     private var floorObservation: Job? = null
     private var roomObservation: Job? = null
 
@@ -85,6 +88,7 @@ class OutletViewModel(
             observeOutlet()
             observeDevices()
             observeAlerts()
+            observeReportAlerts()
             observeFloors()
         }
     }
@@ -861,7 +865,29 @@ class OutletViewModel(
         }
     }
 
+    private fun observeReportAlerts() {
+        reportAlertObservation?.cancel()
+        mutableUiState.update { it.copy(isLoadingReport = true) }
+        reportAlertObservation = viewModelScope.launch {
+            repository.observeReportAlerts(HOME_ID)
+                .catch {
+                    mutableUiState.update {
+                        it.copy(isLoadingReport = false)
+                    }
+                }
+                .collect { alerts ->
+                    mutableUiState.update {
+                        it.copy(
+                            reportAlerts = alerts,
+                            isLoadingReport = false,
+                        )
+                    }
+                }
+        }
+    }
+
     private fun observeFloors() {
+
         floorObservation?.cancel()
 
         mutableUiState.update { state ->

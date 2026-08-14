@@ -109,6 +109,26 @@ class FirebaseOutletRepository(
         awaitClose { registration.remove() }
     }
 
+    override fun observeReportAlerts(homeId: String): Flow<List<HomeAlert>> = callbackFlow {
+        val registration = firestore
+            .collection("homes")
+            .document(homeId)
+            .collection("alerts")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(200)
+            .addSnapshotListener { snapshot, exception ->
+                when {
+                    exception != null -> close(exception)
+                    snapshot == null -> close(IllegalStateException("Report alert snapshot is missing."))
+                    else -> runCatching {
+                        snapshot.documents.map(DocumentSnapshot::toHomeAlert)
+                    }.onSuccess(::trySend).onFailure(::close)
+                }
+            }
+
+        awaitClose { registration.remove() }
+    }
+
     override suspend fun createDevice(
         homeId: String,
         device: NewDevice,
