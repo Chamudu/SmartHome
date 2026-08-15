@@ -9,47 +9,47 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF0284C7),
+    primary = Color(0xFF1565C0), // Deep Blue
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE0F2FE),
-    onPrimaryContainer = Color(0xFF0369A1),
-    secondary = Color(0xFF475569),
+    primaryContainer = Color(0xFFD6E4FF), // Light blue background
+    onPrimaryContainer = Color(0xFF00256E),
+    secondary = Color(0xFF0277BD), // Darker blue
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFF1F5F9),
-    onSecondaryContainer = Color(0xFF334155),
-    tertiary = Color(0xFF6366F1),
-    tertiaryContainer = Color(0xFFEEF2FF),
-    onTertiaryContainer = Color(0xFF3730A3),
-    background = Color(0xFFF8FAFC),
+    secondaryContainer = Color(0xFFCDE5FF),
+    onSecondaryContainer = Color(0xFF001D34),
+    tertiary = Color(0xFF006A60), // Teal accent
+    tertiaryContainer = Color(0xFFCBF5ED),
+    onTertiaryContainer = Color(0xFF00201C),
+    background = Color(0xFFF5F8FF), // Slight blue-tinted white
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF0F172A),
-    surfaceVariant = Color(0xFFF1F5F9),
-    onSurfaceVariant = Color(0xFF475569),
-    error = Color(0xFFDC2626),
-    errorContainer = Color(0xFFFEE2E2),
-    onErrorContainer = Color(0xFF991B1B),
+    onSurface = Color(0xFF1A1C1E),
+    surfaceVariant = Color(0xFFE1E7F0), // Blue-grey cards
+    onSurfaceVariant = Color(0xFF3A4459),
+    error = Color(0xFFBA1A1A),
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF38BDF8),
-    onPrimary = Color(0xFF003549),
-    primaryContainer = Color(0xFF0369A1),
-    onPrimaryContainer = Color(0xFFE0F2FE),
-    secondary = Color(0xFF94A3B8),
-    onSecondary = Color(0xFF0F172A),
-    secondaryContainer = Color(0xFF1E293B),
-    onSecondaryContainer = Color(0xFFE2E8F0),
-    tertiary = Color(0xFF818CF8),
-    tertiaryContainer = Color(0xFF312E81),
-    onTertiaryContainer = Color(0xFFE0E7FF),
-    background = Color(0xFF0F172A),
-    surface = Color(0xFF1E293B),
-    onSurface = Color(0xFFF8FAFC),
-    surfaceVariant = Color(0xFF334155),
+    primary = Color(0xFF90CAF9), // Light blue for dark theme
+    onPrimary = Color(0xFF003064),
+    primaryContainer = Color(0xFF00468A),
+    onPrimaryContainer = Color(0xFFD6E4FF),
+    secondary = Color(0xFF81D4FA),
+    onSecondary = Color(0xFF003549),
+    secondaryContainer = Color(0xFF004D67),
+    onSecondaryContainer = Color(0xFFCDE5FF),
+    tertiary = Color(0xFF4DCEBF),
+    tertiaryContainer = Color(0xFF005048),
+    onTertiaryContainer = Color(0xFFCBF5ED),
+    background = Color(0xFF0D1B2A), // Deep dark navy
+    surface = Color(0xFF132337),
+    onSurface = Color(0xFFE2E8F0),
+    surfaceVariant = Color(0xFF1E3248),
     onSurfaceVariant = Color(0xFF94A3B8),
-    error = Color(0xFFF87171),
-    errorContainer = Color(0xFF7F1D1D),
-    onErrorContainer = Color(0xFFFECACA),
+    error = Color(0xFFFFB4AB),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
 )
 
 object SmartHomeThemeColors {
@@ -57,10 +57,10 @@ object SmartHomeThemeColors {
         @Composable get() = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     val statusOn: Color
-        @Composable get() = if (isDark) Color(0xFF34D399) else Color(0xFF10B981)
+        @Composable get() = if (isDark) Color(0xFF4ADE80) else Color(0xFF16A34A)
 
     val statusOnContainer: Color
-        @Composable get() = if (isDark) Color(0xFF064E3B) else Color(0xFFD1FAE5)
+        @Composable get() = if (isDark) Color(0xFF14532D) else Color(0xFFDCFCE7)
 
     val statusDisconnected: Color
         @Composable get() = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)

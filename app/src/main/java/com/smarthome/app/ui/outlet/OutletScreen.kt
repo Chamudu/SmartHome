@@ -281,6 +281,18 @@ private fun OutletDashboard(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var scheduleDevice by remember { mutableStateOf<SmartDevice?>(null) }
+    var lastReadSafetyAlertTime by rememberSaveable { androidx.compose.runtime.mutableLongStateOf(0L) }
+
+    androidx.compose.runtime.LaunchedEffect(selectedTab, state.reportAlerts) {
+        if (selectedTab == 3) {
+            val maxTime = state.reportAlerts
+                .filter { it.severity == com.smarthome.app.domain.model.AlertSeverity.CRITICAL }
+                .maxOfOrNull { it.createdAtMillis } ?: 0L
+            if (maxTime > lastReadSafetyAlertTime) {
+                lastReadSafetyAlertTime = maxTime
+            }
+        }
+    }
 
     scheduleDevice?.let { device ->
         LightScheduleDialog(
@@ -417,6 +429,29 @@ private fun OutletDashboard(
             Tab(
                 selected = selectedTab == 3,
                 onClick = { selectedTab = 3 },
+                text = { Text("Activity") },
+                icon = { Icon(SmartHomeIcons.Report, contentDescription = null) },
+            )
+            Tab(
+                selected = selectedTab == 4,
+                onClick = { selectedTab = 4 },
+                text = { Text("Safety") },
+                icon = { 
+                    val criticalCount = state.reportAlerts.count { it.severity == com.smarthome.app.domain.model.AlertSeverity.CRITICAL && it.createdAtMillis > lastReadSafetyAlertTime }
+                    if (criticalCount > 0) {
+                        androidx.compose.material3.BadgedBox(
+                            badge = { androidx.compose.material3.Badge { Text(criticalCount.toString()) } }
+                        ) {
+                            Icon(SmartHomeIcons.Safety, contentDescription = null)
+                        }
+                    } else {
+                        Icon(SmartHomeIcons.Safety, contentDescription = null)
+                    }
+                },
+            )
+            Tab(
+                selected = selectedTab == 5,
+                onClick = { selectedTab = 5 },
                 text = { Text("Profile") },
                 icon = { Icon(SmartHomeIcons.Profile, contentDescription = null) },
             )
@@ -439,12 +474,6 @@ private fun OutletDashboard(
                     label = "Active",
                     value = state.devices.count { it.reportedStatus == DeviceStatus.ON }.toString(),
                     icon = SmartHomeIcons.Power,
-                    modifier = Modifier.weight(1f),
-                )
-                SummaryTile(
-                    label = "Alerts",
-                    value = state.alerts.size.toString(),
-                    icon = SmartHomeIcons.Warning,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -470,25 +499,7 @@ private fun OutletDashboard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (state.isLoadingAlerts || state.alerts.isNotEmpty()) {
-                Text(
-                    text = "Safety alerts",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                if (state.isLoadingAlerts) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    state.alerts.take(3).forEach { alert ->
-                        AlertCard(
-                            alert = alert,
-                            deviceName = state.devices.firstOrNull { it.id == alert.deviceId }?.name,
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
+
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -582,6 +593,18 @@ private fun OutletDashboard(
                 onDeviceMoved = onDeviceMoved,
                 onDeviceDeleted = onDeviceDeleted,
             )
+        } else if (selectedTab == 2) {
+            ReportSection(
+                reportAlerts = state.reportAlerts.filter { it.severity == com.smarthome.app.domain.model.AlertSeverity.INFO },
+                devices = state.devices,
+                isLoading = state.isLoadingReport,
+            )
+        } else if (selectedTab == 3) {
+            SafetySection(
+                reportAlerts = state.reportAlerts.filter { it.severity == com.smarthome.app.domain.model.AlertSeverity.CRITICAL },
+                devices = state.devices,
+                isLoading = state.isLoadingReport,
+            )
         } else {
             ProfileSection(
                 email = state.accountEmail ?: state.email.takeIf(String::isNotBlank),
@@ -630,7 +653,7 @@ private fun AlertCard(
     val containerColor = when (alert.severity) {
         AlertSeverity.CRITICAL -> MaterialTheme.colorScheme.errorContainer
         AlertSeverity.WARNING -> MaterialTheme.colorScheme.tertiaryContainer
-        AlertSeverity.INFO -> MaterialTheme.colorScheme.secondaryContainer
+        AlertSeverity.INFO -> MaterialTheme.colorScheme.surfaceVariant
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -745,7 +768,11 @@ private fun DeviceSummaryCard(
                         Text(unavailableReason, style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(
-                        checked = device.desiredStatus == PowerState.ON,
+                        checked = if (device.commandState == com.smarthome.app.domain.model.CommandState.PENDING) {
+                            device.desiredStatus == PowerState.ON
+                        } else {
+                            device.reportedStatus == DeviceStatus.ON
+                        },
                         onCheckedChange = { enabled ->
                             onDevicePowerStateRequested(
                                 device.id,
@@ -793,7 +820,11 @@ private fun DeviceSummaryCard(
                     }
                     val key = "${device.id}:${channel.id}"
                     Switch(
-                        checked = channel.desiredStatus == PowerState.ON,
+                        checked = if (channel.isPending) {
+                            channel.desiredStatus == PowerState.ON
+                        } else {
+                            channel.reportedStatus == DeviceStatus.ON
+                        },
                         onCheckedChange = { enabled ->
                             onSwitchChannelStateRequested(
                                 device.id,
@@ -1494,5 +1525,280 @@ private fun StatusRow(
             text = value,
             style = MaterialTheme.typography.labelLarge,
         )
+    }
+}
+
+// ── Reports Tab ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun ReportSection(
+    reportAlerts: List<HomeAlert>,
+    devices: List<SmartDevice>,
+    isLoading: Boolean,
+) {
+    if (isLoading) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator()
+            Text(
+                text = "Loading activity data…",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        return
+    }
+
+    // Count alerts per device
+    val countByDevice: Map<String, Int> = reportAlerts
+        .groupBy { it.deviceId }
+        .mapValues { it.value.size }
+
+    // Most recent alert timestamp per device
+    val lastSeenByDevice: Map<String, Long> = reportAlerts
+        .groupBy { it.deviceId }
+        .mapValues { entry -> entry.value.maxOf { it.createdAtMillis } }
+
+    val devicesWithActivity = countByDevice.size
+    val totalEvents = reportAlerts.size
+
+    Spacer(modifier = Modifier.height(20.dp))
+
+    Text(
+        text = "Activity Log",
+        style = MaterialTheme.typography.titleLarge,
+    )
+    Text(
+        text = "Chronological history of your home.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+    )
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    if (reportAlerts.isEmpty()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    SmartHomeIcons.Report,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+                Text(
+                    text = "No standard activity recorded yet.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = "Toggle a device to generate events.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+            }
+        }
+    } else {
+        reportAlerts.sortedByDescending { it.createdAtMillis }.forEach { alert ->
+            AlertCard(
+                alert = alert,
+                deviceName = devices.firstOrNull { it.id == alert.deviceId }?.name,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun ReportStatTile(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                value,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeviceActivityRow(
+    name: String,
+    profile: DeviceProfile?,
+    eventCount: Int,
+    maxCount: Int,
+    lastSeenMillis: Long?,
+) {
+    val glyph = when (profile) {
+        DeviceProfile.OUTLET -> "◉"
+        DeviceProfile.MULTI_SWITCH -> "≡"
+        DeviceProfile.SAFETY_OUTLET -> "⚠"
+        DeviceProfile.LIGHT -> "✦"
+        DeviceProfile.CAMERA -> "▣"
+        null -> "?"
+    }
+    val barFraction = (eventCount.toFloat() / maxCount.toFloat()).coerceIn(0f, 1f)
+    val lastSeenText = lastSeenMillis?.let {
+        val diff = System.currentTimeMillis() - it
+        when {
+            diff < 60_000L -> "Just now"
+            diff < 3_600_000L -> "${diff / 60_000L}m ago"
+            diff < 86_400_000L -> "${diff / 3_600_000L}h ago"
+            else -> "${diff / 86_400_000L}d ago"
+        }
+    } ?: "—"
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = glyph,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.size(10.dp))
+                    Column {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            text = profile?.displayName ?: "Unknown",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "$eventCount event${if (eventCount != 1) "s" else ""}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = lastSeenText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Activity bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(3.dp),
+                    ),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(barFraction)
+                        .height(6.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(3.dp),
+                        ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SafetySection(
+    reportAlerts: List<com.smarthome.app.domain.model.HomeAlert>,
+    devices: List<SmartDevice>,
+    isLoading: Boolean,
+) {
+    if (isLoading) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Safety Overview", style = MaterialTheme.typography.titleLarge)
+        Text("Recent critical cutoffs and offline hardware alerts.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (reportAlerts.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(SmartHomeIcons.Safety, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("No safety issues reported recently.", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        } else {
+            reportAlerts.sortedByDescending { it.createdAtMillis }.forEach { alert ->
+                AlertCard(
+                    alert = alert,
+                    deviceName = devices.firstOrNull { it.id == alert.deviceId }?.name,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
     }
 }

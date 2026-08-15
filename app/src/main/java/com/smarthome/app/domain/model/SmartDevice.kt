@@ -20,6 +20,7 @@ sealed interface DeviceConfiguration {
 
     data class SafetyOutlet(
         val maxOnDurationSeconds: Int,
+        val cutoffDueAtMillis: Long?,
     ) : DeviceConfiguration
 
     data class Light(

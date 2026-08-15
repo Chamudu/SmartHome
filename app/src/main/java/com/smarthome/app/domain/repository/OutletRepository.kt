@@ -34,6 +34,8 @@ interface OutletRepository {
 
     fun observeAlerts(homeId: String): Flow<List<HomeAlert>>
 
+    /** Fetches a larger alert window used exclusively by the Reports screen. */
+    fun observeReportAlerts(homeId: String): Flow<List<HomeAlert>>
     fun observeDeviceEvents(
         homeId: String,
         deviceId: String,

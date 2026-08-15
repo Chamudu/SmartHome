@@ -122,6 +122,12 @@ class FirebaseOutletRepository(
         awaitClose { registration.remove() }
     }
 
+    override fun observeReportAlerts(homeId: String): Flow<List<HomeAlert>> = callbackFlow {
+        val registration = firestore
+            .collection("homes")
+            .document(homeId)
+            .collection("alerts")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
     override fun observeDeviceEvents(
         homeId: String,
         deviceId: String,
@@ -137,6 +143,9 @@ class FirebaseOutletRepository(
             .addSnapshotListener { snapshot, exception ->
                 when {
                     exception != null -> close(exception)
+                    snapshot == null -> close(IllegalStateException("Report alert snapshot is missing."))
+                    else -> runCatching {
+                        snapshot.documents.map(DocumentSnapshot::toHomeAlert)
                     snapshot == null -> close(IllegalStateException("Event snapshot is missing."))
                     else -> runCatching {
                         snapshot.documents.map(DocumentSnapshot::toDeviceEvent)
@@ -359,6 +368,7 @@ private fun DocumentSnapshot.toSmartDevice(): SmartDevice {
         )
         DeviceProfile.SAFETY_OUTLET -> DeviceConfiguration.SafetyOutlet(
             maxOnDurationSeconds = config.requiredInt("maxOnDurationSeconds"),
+            cutoffDueAtMillis = (config["cutoffDueAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
         )
         DeviceProfile.LIGHT -> DeviceConfiguration.Light(
             scheduleEnabled = (config["schedule"] as? Map<*, *>)?.get("enabled") as? Boolean ?: false,

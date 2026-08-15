@@ -54,6 +54,8 @@ data class OutletUiState(
     val scheduleUpdatesInFlight: Set<String> = emptySet(),
     val alerts: List<HomeAlert> = emptyList(),
     val isLoadingAlerts: Boolean = false,
+    val reportAlerts: List<HomeAlert> = emptyList(),
+    val isLoadingReport: Boolean = false,
     val eventsByDevice: Map<String, List<DeviceEvent>> = emptyMap(),
     val isLoadingEvents: Boolean = false,
     val eventsErrorMessage: String? = null,
@@ -91,8 +93,10 @@ class OutletViewModel(
     private var outletObservation: Job? = null
     private var deviceObservation: Job? = null
     private var alertObservation: Job? = null
+    private var reportAlertObservation: Job? = null
     private var floorObservation: Job? = null
     private var roomObservation: Job? = null
+    private val safetyTimers = mutableMapOf<String, Job>()
     private val deviceEventJobs: MutableMap<String, Job> = mutableMapOf()
     private var authenticationObservation: Job? = null
     private var networkObservation: Job? = null
@@ -106,6 +110,7 @@ class OutletViewModel(
             observeOutlet()
             observeDevices()
             observeAlerts()
+            observeReportAlerts()
             observeFloors()
         }
     }
@@ -811,6 +816,27 @@ class OutletViewModel(
                     }
                 }
                 .collect { devices ->
+                    devices.forEach { device ->
+                        if (device.profile == DeviceProfile.SAFETY_OUTLET && device.reportedStatus.name == "ON") {
+                            val config = device.configuration as? DeviceConfiguration.SafetyOutlet
+                            if (config != null) {
+                                if (!safetyTimers.containsKey(device.id)) {
+                                    val delayMs = config.cutoffDueAtMillis?.let { maxOf(0L, it - System.currentTimeMillis()) }
+                                        ?: (config.maxOnDurationSeconds * 1000L)
+                                    safetyTimers[device.id] = viewModelScope.launch {
+                                        kotlinx.coroutines.delay(delayMs)
+                                        runCatching {
+                                            repository.requestPowerState(HOME_ID, device.id, PowerState.OFF)
+                                        }
+                                        safetyTimers.remove(device.id)
+                                    }
+                                }
+                            }
+                        } else {
+                            safetyTimers.remove(device.id)?.cancel()
+                        }
+                    }
+
                     mutableUiState.update {
                         it.copy(
                             devices = devices,
@@ -906,7 +932,29 @@ class OutletViewModel(
         }
     }
 
+    private fun observeReportAlerts() {
+        reportAlertObservation?.cancel()
+        mutableUiState.update { it.copy(isLoadingReport = true) }
+        reportAlertObservation = viewModelScope.launch {
+            repository.observeReportAlerts(HOME_ID)
+                .catch {
+                    mutableUiState.update {
+                        it.copy(isLoadingReport = false)
+                    }
+                }
+                .collect { alerts ->
+                    mutableUiState.update {
+                        it.copy(
+                            reportAlerts = alerts,
+                            isLoadingReport = false,
+                        )
+                    }
+                }
+        }
+    }
+
     private fun observeFloors() {
+
         floorObservation?.cancel()
 
         mutableUiState.update { state ->
