@@ -744,11 +744,22 @@ describe('device event authorization', () => {
     await assertSucceeds(getDoc(eventReference(database, 'seed-event')))
   })
 
-  it('denies an owner forging a device event', async () => {
+  it('allows an owner to record a device state event for a command', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertSucceeds(
+      setDoc(
+        eventReference(database, 'state-device-command-1'),
+        validStateEvent({ origin: 'ANDROID', actorId: OWNER_UID }),
+      ),
+    )
+  })
+
+  it('denies an owner forging an invalid device event', async () => {
     const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
 
     await assertFails(
-      setDoc(eventReference(database, 'forged-event'), validStateEvent()),
+      setDoc(eventReference(database, 'forged-event'), validStateEvent({ origin: 'HACKER' })),
     )
   })
 

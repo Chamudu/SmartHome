@@ -858,6 +858,8 @@ private class FakeOutletRepository(
 
     override fun observeAlerts(homeId: String): Flow<List<HomeAlert>> = alerts
 
+    override fun observeReportAlerts(homeId: String): Flow<List<HomeAlert>> = alerts
+
     override fun observeDeviceEvents(homeId: String, deviceId: String): Flow<List<DeviceEvent>> = events
 
     override suspend fun createDevice(homeId: String, device: NewDevice): String {
