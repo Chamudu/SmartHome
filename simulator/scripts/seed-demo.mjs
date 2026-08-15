@@ -85,7 +85,7 @@ try {
   }))
   await ensureDevice('demo-camera', baseDevice('Office camera', 'CAMERA', firstFloorId, 'office', 8, 2, {
     mediaType: 'SNAPSHOT',
-    mediaUri: 'https://placehold.co/640x360',
+    mediaUri: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=640&q=80',
     capturedAt: serverTimestamp(),
   }))
 

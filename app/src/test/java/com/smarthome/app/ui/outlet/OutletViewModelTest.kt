@@ -1,5 +1,7 @@
 package com.smarthome.app.ui.outlet
 
+import com.smarthome.app.data.connectivity.NetworkMonitor
+import com.smarthome.app.data.recovery.SessionRevokedException
 import com.smarthome.app.domain.model.CommandState
 import com.smarthome.app.domain.model.DeviceStatus
 import com.smarthome.app.domain.model.DeviceProfile
@@ -12,13 +14,21 @@ import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.HomeAlert
 import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.model.DeviceConfiguration
+import com.smarthome.app.domain.model.DeviceEvent
+import com.smarthome.app.domain.model.EventOrigin
 import com.smarthome.app.domain.model.SwitchChannel
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.OutletRepository
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -59,6 +69,49 @@ class OutletViewModelTest {
 
             assertEquals("alert-1", viewModel.uiState.value.alerts.single().id)
             assertFalse(viewModel.uiState.value.isLoadingAlerts)
+
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `recorded device events are exposed in realtime UI state`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+
+            repository.emitDevices(listOf(lightDevice()))
+            advanceUntilIdle()
+
+            repository.emitEvents(
+                listOf(
+                    DeviceEvent(
+                        id = "state-request-1",
+                        type = "STATE_REPORTED",
+                        fromStatus = DeviceStatus.OFF,
+                        toStatus = DeviceStatus.ON,
+                        origin = EventOrigin.ANDROID,
+                        actorId = "owner",
+                        requestId = "request-1",
+                        reason = null,
+                        occurredAtMillis = 1234L,
+                        channelId = null,
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                "state-request-1",
+                viewModel.uiState.value.eventsByDevice["porch-light"]?.single()?.id,
+            )
+            assertFalse(viewModel.uiState.value.isLoadingEvents)
 
             viewModel.signOut()
         } finally {
@@ -156,6 +209,151 @@ class OutletViewModelTest {
             assertNull(repository.requestedPowerState)
 
             viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `listener failure recovers by resubscribing`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+
+            repository.emit(outlet())
+            advanceUntilIdle()
+            assertEquals("main-outlet", viewModel.uiState.value.outlet?.id)
+
+            repository.emitOutletFailure(IOException("Service unavailable."))
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isRecovering)
+            assertEquals("main-outlet", viewModel.uiState.value.outlet?.id)
+            assertNull(viewModel.uiState.value.errorMessage)
+
+            repository.emit(outlet(reportedStatus = DeviceStatus.ON))
+            advanceUntilIdle()
+            assertEquals(DeviceStatus.ON, viewModel.uiState.value.outlet?.reportedStatus)
+
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `offline command is queued and flushed on reconnect`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val monitor = FakeNetworkMonitor(initialOnline = false)
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository(), monitor)
+            advanceUntilIdle()
+
+            repository.emit(outlet())
+            advanceUntilIdle()
+
+            repository.failNextCommands = 1
+            viewModel.requestPowerState(PowerState.ON)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isSendingCommand)
+            assertTrue(viewModel.uiState.value.isRecovering)
+
+            monitor.setOnline(true)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isSendingCommand)
+            assertFalse(viewModel.uiState.value.isRecovering)
+            assertEquals(PowerState.ON, repository.requestedPowerState)
+
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `online command retries with backoff then reports failure`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+
+            repository.emit(outlet())
+            advanceUntilIdle()
+
+            repository.failNextCommands = 5
+            viewModel.requestPowerState(PowerState.ON)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isSendingCommand)
+            assertEquals("The outlet command could not be sent.", viewModel.uiState.value.errorMessage)
+
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `permission denied command routes to sign in`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+
+            repository.emit(outlet())
+            advanceUntilIdle()
+
+            repository.failWithSessionRevoked = true
+            viewModel.requestPowerState(PowerState.ON)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isAuthenticated)
+            assertEquals(
+                "Your session has expired. Please sign in again.",
+                viewModel.uiState.value.errorMessage,
+            )
+
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `session expiry returns user to sign in`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isAuthenticated)
+
+            repository.emitAuthentication(null)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isAuthenticated)
+            assertEquals(
+                "Your session has expired. Please sign in again.",
+                viewModel.uiState.value.errorMessage,
+            )
         } finally {
             Dispatchers.resetMain()
         }
@@ -365,6 +563,80 @@ class OutletViewModelTest {
     }
 
     @Test
+    fun `creating camera forwards configured media uri and infers room`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val outletRepository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val floorRepository = FakeFloorRepository()
+            val viewModel = OutletViewModel(outletRepository, floorRepository)
+            floorRepository.emitFloors(listOf(floor()))
+            advanceUntilIdle()
+            floorRepository.emitRooms(
+                listOf(RoomLayout("office", "Office", 0, 0, 4, 4)),
+            )
+            advanceUntilIdle()
+
+            val mediaUri = "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=640&q=80"
+            viewModel.createDevice(
+                name = "Living room camera",
+                profile = DeviceProfile.CAMERA,
+                column = 2,
+                row = 3,
+                channelCount = 2,
+                maxOnDurationMinutes = 15,
+                mediaUri = mediaUri,
+            )
+            advanceUntilIdle()
+
+            assertEquals("office", outletRepository.createdDevice?.roomId)
+            assertEquals(DeviceProfile.CAMERA, outletRepository.createdDevice?.profile)
+            assertEquals(mediaUri, outletRepository.createdDevice?.mediaUri)
+            assertEquals("Device created.", viewModel.uiState.value.layoutMessage)
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `creating camera rejects non-https media uri`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val outletRepository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val floorRepository = FakeFloorRepository()
+            val viewModel = OutletViewModel(outletRepository, floorRepository)
+            floorRepository.emitFloors(listOf(floor()))
+            advanceUntilIdle()
+            floorRepository.emitRooms(
+                listOf(RoomLayout("office", "Office", 0, 0, 4, 4)),
+            )
+            advanceUntilIdle()
+
+            viewModel.createDevice(
+                name = "Bad camera",
+                profile = DeviceProfile.CAMERA,
+                column = 2,
+                row = 3,
+                channelCount = 2,
+                maxOnDurationMinutes = 15,
+                mediaUri = "javascript:alert(1)",
+            )
+            advanceUntilIdle()
+
+            assertNull(outletRepository.createdDevice)
+            assertEquals(
+                "Camera media must use an HTTPS URI.",
+                viewModel.uiState.value.layoutMessage,
+            )
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
     fun `moving device validates destination and infers room`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
@@ -518,11 +790,24 @@ private class FakeOutletRepository(
     override val authenticatedUserEmail: String?
         get() = signedInEmail
     private val outlets = MutableSharedFlow<OutletDevice>(replay = 1)
+    private val outletFailures = MutableSharedFlow<Throwable>()
     private val devices = MutableSharedFlow<List<SmartDevice>>(replay = 1)
     private val alerts = MutableSharedFlow<List<HomeAlert>>(replay = 1)
+    private val events = MutableSharedFlow<List<DeviceEvent>>(replay = 1)
+    private val authentication = MutableSharedFlow<String?>(replay = 1)
+
+    init {
+        if (hasAuthenticatedUser) {
+            authentication.tryEmit("owner-uid")
+        }
+    }
 
     var signedInEmail: String? = null
         private set
+
+    var failNextCommands: Int = 0
+
+    var failWithSessionRevoked: Boolean = false
 
     var requestedPowerState: PowerState? = null
         private set
@@ -551,20 +836,29 @@ private class FakeOutletRepository(
     ) {
         signedInEmail = email
         hasAuthenticatedUser = true
+        authentication.tryEmit("owner-uid")
     }
 
     override fun signOut() {
         hasAuthenticatedUser = false
+        authentication.tryEmit(null)
     }
+
+    override fun observeAuthentication(): Flow<String?> = authentication
 
     override fun observeOutlet(
         homeId: String,
         deviceId: String,
-    ): Flow<OutletDevice> = outlets
+    ): Flow<OutletDevice> = merge(
+        outlets,
+        outletFailures.map<Throwable, OutletDevice> { throw it },
+    )
 
     override fun observeDevices(homeId: String): Flow<List<SmartDevice>> = devices
 
     override fun observeAlerts(homeId: String): Flow<List<HomeAlert>> = alerts
+
+    override fun observeDeviceEvents(homeId: String, deviceId: String): Flow<List<DeviceEvent>> = events
 
     override suspend fun createDevice(homeId: String, device: NewDevice): String {
         createdDevice = device
@@ -576,6 +870,13 @@ private class FakeOutletRepository(
         deviceId: String,
         powerState: PowerState,
     ) {
+        if (failWithSessionRevoked) {
+            throw SessionRevokedException("Session expired.")
+        }
+        if (failNextCommands > 0) {
+            failNextCommands -= 1
+            throw IOException("Service unavailable.")
+        }
         requestedDeviceId = deviceId
         requestedPowerState = powerState
     }
@@ -638,6 +939,30 @@ private class FakeOutletRepository(
 
     suspend fun emitDevices(value: List<SmartDevice>) {
         devices.emit(value)
+    }
+
+    suspend fun emitEvents(value: List<DeviceEvent>) {
+        events.emit(value)
+    }
+
+    suspend fun emitOutletFailure(cause: Throwable) {
+        outletFailures.emit(cause)
+    }
+
+    suspend fun emitAuthentication(uid: String?) {
+        authentication.emit(uid)
+    }
+}
+
+private class FakeNetworkMonitor(
+    initialOnline: Boolean = true,
+) : NetworkMonitor {
+    private val online = MutableStateFlow(initialOnline)
+
+    override val isOnline: StateFlow<Boolean> = online.asStateFlow()
+
+    fun setOnline(value: Boolean) {
+        online.value = value
     }
 }
 

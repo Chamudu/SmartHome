@@ -5,6 +5,7 @@ import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.NewDevice
 import com.smarthome.app.domain.model.HomeAlert
+import com.smarthome.app.domain.model.DeviceEvent
 import kotlinx.coroutines.flow.Flow
 
 interface OutletRepository {
@@ -18,6 +19,12 @@ interface OutletRepository {
 
     fun signOut()
 
+    /**
+     * Emits the current authenticated user id, or null once the session ends (sign-out, expiry, or
+     * revocation). Used to route the user back to the authentication flow.
+     */
+    fun observeAuthentication(): Flow<String?>
+
     fun observeOutlet(
         homeId: String,
         deviceId: String,
@@ -26,6 +33,11 @@ interface OutletRepository {
     fun observeDevices(homeId: String): Flow<List<SmartDevice>>
 
     fun observeAlerts(homeId: String): Flow<List<HomeAlert>>
+
+    fun observeDeviceEvents(
+        homeId: String,
+        deviceId: String,
+    ): Flow<List<DeviceEvent>>
 
     suspend fun createDevice(
         homeId: String,

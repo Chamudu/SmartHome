@@ -3,12 +3,24 @@ import type { FormEvent } from 'react'
 import './App.css'
 import { isFirebaseConfigured } from './firebase'
 import { useDeviceSimulator } from './useDeviceSimulator'
-import type { DeviceConfig, DeviceProfile, DeviceStatus, DeviceTwin } from './types'
+import {
+  calculateUsageReport,
+  deviceEventToUsageEvent,
+  formatDuration,
+  type UsageEvent,
+} from './usage'
+import {
+  estimateReport,
+  formatCost,
+  formatEnergy,
+} from './energy'
+import type { DeviceConfig, DeviceEvent, DeviceProfile, DeviceStatus, DeviceTwin } from './types'
 
 const statusOptions: DeviceStatus[] = ['ON', 'OFF', 'ERROR', 'DISCONNECTED']
 const profileOptions: Array<DeviceProfile | 'ALL'> = [
   'ALL', 'OUTLET', 'MULTI_SWITCH', 'SAFETY_OUTLET', 'LIGHT', 'CAMERA',
 ]
+const USAGE_PERIOD_MILLIS = 7 * 24 * 60 * 60 * 1_000
 
 function App() {
   return isFirebaseConfigured ? <SimulatorConsole /> : <ConfigurationRequired />
@@ -113,6 +125,7 @@ function SimulatorConsole() {
             <div className="device-list">
               {visibleDevices.map((device) => (
                 <DeviceCard key={device.id} device={device}
+                  events={simulator.eventsByDevice[device.id] ?? []}
                   busy={simulator.busyDeviceIds.has(device.id)}
                   busyChannelKeys={simulator.busyChannelKeys}
                   onReport={(status) => void simulator.reportStatus(device.id, status)}
@@ -127,8 +140,9 @@ function SimulatorConsole() {
   )
 }
 
-function DeviceCard({ device, busy, busyChannelKeys, onReport, onReportChannel }: {
+function DeviceCard({ device, events, busy, busyChannelKeys, onReport, onReportChannel }: {
   device: DeviceTwin
+  events: DeviceEvent[]
   busy: boolean
   busyChannelKeys: ReadonlySet<string>
   onReport: (status: DeviceStatus) => void
@@ -138,6 +152,22 @@ function DeviceCard({ device, busy, busyChannelKeys, onReport, onReportChannel }
   const channels = device.profile === 'MULTI_SWITCH' && 'channels' in device.config
     ? device.config.channels
     : []
+  const usage = useMemo(() => {
+    const usageEvents = events
+      .map(deviceEventToUsageEvent)
+      .filter((event): event is UsageEvent => event !== null)
+    return calculateUsageReport(usageEvents, {
+      periodStartMillis: Date.now() - USAGE_PERIOD_MILLIS,
+      periodEndMillis: Date.now(),
+      initialStatus: device.reported.status,
+    })
+  }, [events, device.reported.status])
+  const hasOngoing = usage.entries.some((entry) => entry.usage.ongoing)
+  const energyEstimate = useMemo(
+    () => estimateReport(device.profile, usage),
+    [device.profile, usage],
+  )
+
   return (
     <article className="device-card">
       <div className="device-identity">
@@ -152,6 +182,30 @@ function DeviceCard({ device, busy, busyChannelKeys, onReport, onReportChannel }
         <div><dt>Position</dt><dd>{device.position.column}, {device.position.row}</dd></div>
       </dl>
       <p className="config-summary">{configurationSummary(device.profile, device.config)}</p>
+      <section className="usage-panel">
+        <div className="usage-heading">
+          <p className="control-title">Usage · 7 days</p>
+          <span className={`status-pill ${hasOngoing ? 'status-on' : 'status-off'}`}>
+            {hasOngoing ? 'ACTIVE NOW' : 'IDLE'}
+          </span>
+        </div>
+        <dl className="telemetry-grid">
+          <div><dt>Activations</dt><dd>{usage.totalActivations}</dd></div>
+          <div><dt>Active time</dt><dd>{formatDuration(usage.totalDurationMillis)}</dd></div>
+          <div><dt>Est. energy</dt><dd>{formatEnergy(energyEstimate.energyKwh)}</dd></div>
+          <div><dt>Est. cost</dt><dd>{formatCost(energyEstimate.cost)}</dd></div>
+        </dl>
+        {usage.entries.filter((entry) => entry.key !== '').map((entry) => (
+          <p className="muted usage-channel" key={entry.key}>
+            {formatIdentifier(entry.key)} · {entry.usage.activationCount} activation(s) ·
+            {formatDuration(entry.usage.durationMillis)}
+            {entry.usage.ongoing ? ' · active now' : ''}
+          </p>
+        ))}
+        {usage.entries.some((entry) => entry.usage.unpairedOffCount > 0) && (
+          <p className="muted">Reported OFF transitions without a paired ON were ignored.</p>
+        )}
+      </section>
       {channels.map((channel) => {
         const channelBusy = busyChannelKeys.has(`${device.id}:${channel.id}`)
         const channelPending = (channel.reportedStatus === 'ON' || channel.reportedStatus === 'OFF') &&

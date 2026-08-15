@@ -617,6 +617,12 @@ private fun DeviceDetailDialog(
     )
 }
 
+private val cameraSampleUris = listOf(
+    "Living room" to "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=640&q=80",
+    "Kitchen" to "https://images.unsplash.com/photo-1484154218962-a197022b5858?w=640&q=80",
+    "Front door" to "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=640&q=80",
+)
+
 @Composable
 private fun AddDeviceDialog(
     initialColumn: Int,
@@ -631,7 +637,7 @@ private fun AddDeviceDialog(
     var row by remember { mutableStateOf(initialRow.toString()) }
     var channels by remember { mutableStateOf("2") }
     var duration by remember { mutableStateOf("15") }
-    var mediaUri by remember { mutableStateOf("https://placehold.co/640x360") }
+    var mediaUri by remember { mutableStateOf(cameraSampleUris.first().second) }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
@@ -687,13 +693,26 @@ private fun AddDeviceDialog(
                         label = { Text("Maximum on-time (minutes)") },
                         singleLine = true,
                     )
-                    DeviceProfile.CAMERA -> OutlinedTextField(
-                        value = mediaUri,
-                        onValueChange = { mediaUri = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Mock media HTTPS URI") },
-                        singleLine = true,
-                    )
+                    DeviceProfile.CAMERA -> {
+                        OutlinedTextField(
+                            value = mediaUri,
+                            onValueChange = { mediaUri = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Mock media HTTPS URI") },
+                            singleLine = true,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Sample snapshots", style = MaterialTheme.typography.labelLarge)
+                        Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                            cameraSampleUris.forEach { (label, uri) ->
+                                if (mediaUri == uri) {
+                                    Button(onClick = { mediaUri = uri }) { Text(label) }
+                                } else {
+                                    TextButton(onClick = { mediaUri = uri }) { Text(label) }
+                                }
+                            }
+                        }
+                    }
                     else -> Unit
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

@@ -6,6 +6,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
 import {
+  deleteDoc,
   doc,
   getDoc,
   setDoc,
@@ -687,6 +688,134 @@ describe('device creation validation', () => {
       setDoc(
         doc(database, 'homes', HOME_ID, 'devices', 'forged-device'),
         newDevice('OUTLET', {}),
+      ),
+    )
+  })
+})
+
+describe('device event authorization', () => {
+  function validStateEvent(overrides: Record<string, unknown> = {}) {
+    return {
+      type: 'STATE_REPORTED',
+      fromStatus: 'OFF',
+      toStatus: 'ON',
+      origin: 'SIMULATOR',
+      actorId: null,
+      requestId: 'request-1',
+      reason: null,
+      occurredAt: new Date(),
+      metadata: {},
+      ...overrides,
+    }
+  }
+
+  function eventReference(database: Firestore, eventId: string) {
+    return doc(database, 'homes', HOME_ID, 'devices', DEVICE_ID, 'events', eventId)
+  }
+
+  it('allows the simulator to create a device state event', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertSucceeds(
+      setDoc(eventReference(database, 'state-device-request-1'), validStateEvent()),
+    )
+  })
+
+  it('allows the simulator to create a channel state event', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertSucceeds(
+      setDoc(
+        eventReference(database, 'state-channel-1-request-1'),
+        validStateEvent({ toStatus: 'OFF', metadata: { channelId: 'channel-1' } }),
+      ),
+    )
+  })
+
+  it('allows an active member to read device events', async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'homes', HOME_ID, 'devices', DEVICE_ID, 'events', 'seed-event'),
+        validStateEvent(),
+      )
+    })
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertSucceeds(getDoc(eventReference(database, 'seed-event')))
+  })
+
+  it('denies an owner forging a device event', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+
+    await assertFails(
+      setDoc(eventReference(database, 'forged-event'), validStateEvent()),
+    )
+  })
+
+  it('denies an outsider reading or writing device events', async () => {
+    const database = testEnvironment.authenticatedContext(OUTSIDER_UID).firestore()
+
+    await assertFails(setDoc(eventReference(database, 'outsider-event'), validStateEvent()))
+    await assertFails(getDoc(eventReference(database, 'seed-event')))
+  })
+
+  it('denies the simulator updating an existing event', async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'homes', HOME_ID, 'devices', DEVICE_ID, 'events', 'seed-event'),
+        validStateEvent(),
+      )
+    })
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(
+      updateDoc(eventReference(database, 'seed-event'), { reason: 'altered' }),
+    )
+  })
+
+  it('denies the simulator deleting an existing event', async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'homes', HOME_ID, 'devices', DEVICE_ID, 'events', 'seed-event'),
+        validStateEvent(),
+      )
+    })
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(deleteDoc(eventReference(database, 'seed-event')))
+  })
+
+  it('denies events with an invalid reported status', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(
+      setDoc(eventReference(database, 'bad-status-event'), validStateEvent({ toStatus: 'MAYBE' })),
+    )
+  })
+
+  it('denies events with a non-timestamp occurredAt', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(
+      setDoc(eventReference(database, 'bad-time-event'), validStateEvent({ occurredAt: 'yesterday' })),
+    )
+  })
+
+  it('denies events with an unrecognized origin', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(
+      setDoc(eventReference(database, 'bad-origin-event'), validStateEvent({ origin: 'HACKER' })),
+    )
+  })
+
+  it('denies events with unexpected metadata keys', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(
+      setDoc(
+        eventReference(database, 'bad-metadata-event'),
+        validStateEvent({ metadata: { channelId: 'channel-1', extra: 'value' } }),
       ),
     )
   })

@@ -4,6 +4,20 @@ export type DeviceStatus = 'ON' | 'OFF' | 'ERROR' | 'DISCONNECTED'
 export type PowerStatus = 'ON' | 'OFF'
 export type CommandState = 'IDLE' | 'PENDING' | 'APPLIED' | 'REJECTED' | 'TIMED_OUT'
 export type DeviceProfile = 'OUTLET' | 'MULTI_SWITCH' | 'SAFETY_OUTLET' | 'LIGHT' | 'CAMERA'
+export type EventOrigin = 'ANDROID' | 'SIMULATOR' | 'AUTOMATION' | 'SYSTEM'
+
+export type DeviceEvent = {
+  id: string
+  type: string
+  fromStatus: DeviceStatus | null
+  toStatus: DeviceStatus | null
+  origin: EventOrigin
+  actorId: string | null
+  requestId: string | null
+  reason: string | null
+  occurredAt: Timestamp | null
+  metadata: Record<string, unknown>
+}
 
 export type DesiredState = {
   status: PowerStatus
