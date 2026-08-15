@@ -39,16 +39,19 @@ Status date: 2026-07-28
 - Dedicated Profile tab with the authenticated email and sign-out moved out of the home header.
 - HTTPS mock camera snapshot rendering with honest mock labeling, loading feedback, failure fallback,
   content description, memory caching, and disk caching through Coil.
+- Energy estimate reporting in the Usage tab: estimated kilowatt-hours and cost derived from active
+  duration times assumed per-profile wattage, with mirrored TypeScript calculators for Functions and the
+  simulator.
 
 ## Current verification evidence
 
 | Layer | Evidence |
 | --- | --- |
-| Android domain/ViewModel | 26 passing JUnit tests |
+| Android domain/ViewModel | 50 passing JUnit tests |
 | Android packaging | `:app:assembleDebug` succeeds |
 | Android static analysis | `:app:lintDebug` succeeds with 0 errors |
 | Firestore authorization/schema | 33 passing emulator-backed Vitest tests |
-| Cloud Functions | TypeScript build and 8 Vitest decision tests pass |
+| Cloud Functions | TypeScript build and 24 Vitest decision tests pass |
 | Simulator | TypeScript typecheck, Oxlint, and Vite production build succeed |
 | Cloud rules | Tested rules deployed successfully to the development Firebase project |
 | Physical integration | Outlet synchronization and earlier floor lifecycle accepted on a phone |
@@ -65,7 +68,8 @@ Status date: 2026-07-28
 - Editing an existing safety duration and production deployment of the verified cutoff functions.
 - Camera upload and optional second-phone camera node; URI snapshot rendering is complete.
 - Executing the seed against a target environment still requires owner credentials exported locally.
-- Activity reporting, offline demonstration, CI, and signed release packaging.
+- Activity reporting and energy estimation are implemented; offline demonstration, CI, and signed
+  release packaging remain.
 
 ## Active branch
 

@@ -19,6 +19,8 @@ object SmartHomeIcons {
     val Profile = icon("M12,2 C9.2,2 7,4.2 7,7 C7,9.8 9.2,12 12,12 C14.8,12 17,9.8 17,7 C17,4.2 14.8,2 12,2 Z M12,14 C7.6,14 4,16.2 4,19 L4,22 L20,22 L20,19 C20,16.2 16.4,14 12,14 Z")
     val Report = icon("M3,3 L5,3 L5,21 L3,21 Z M7,13 L9,13 L9,21 L7,21 Z M11,9 L13,9 L13,21 L11,21 Z M15,5 L17,5 L17,21 L15,21 Z M19,11 L21,11 L21,21 L19,21 Z")
 
+    val Activity = icon("M3,4 L5,4 L5,20 L3,20 Z M7,9 L9,9 L9,20 L7,20 Z M11,6 L13,6 L13,20 L11,20 Z M15,12 L17,12 L17,20 L15,20 Z M19,8 L21,8 L21,20 L19,20 Z")
+    val Usage = icon("M12,2 C6.48,2 2,6.48 2,12 C2,17.52 6.48,22 12,22 C17.52,22 22,17.52 22,12 C22,6.48 17.52,2 12,2 Z M11,6 L13,6 L13,11 L17,11 L17,13 L11,13 Z")
     private fun icon(path: String): ImageVector = ImageVector.Builder(
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,

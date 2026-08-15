@@ -233,6 +233,18 @@ Acceptance criteria:
   misleading totals.
 - The selected period and timezone are visible.
 
+#### REPORT-02 — Energy estimate (P2)
+
+A user shall be able to review an estimated power-usage figure for a selected period.
+
+Acceptance criteria:
+
+- The report shows estimated energy in kilowatt-hours and an estimated cost using a fixed tariff.
+- Energy is derived from active duration multiplied by an assumed per-profile wattage, so results are
+  clearly presented as estimates rather than meter readings.
+- Multi-switch units accumulate energy independently per channel.
+- The whole-home total and the per-device value remain consistent with the selected period.
+
 ### Hardware simulator
 
 #### SIM-01 — Reflect cloud state (P0)

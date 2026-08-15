@@ -15,6 +15,8 @@ import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.SwitchChannel
 import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.model.HomeAlert
+import com.smarthome.app.domain.model.DeviceEvent
+import com.smarthome.app.domain.model.EventOrigin
 import com.smarthome.app.domain.repository.OutletRepository
 import java.util.UUID
 import kotlinx.coroutines.channels.awaitClose
@@ -44,6 +46,17 @@ class FirebaseOutletRepository(
 
     override fun signOut() {
         authentication.signOut()
+    }
+
+    override fun observeAuthentication(): Flow<String?> = callbackFlow {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            trySend(auth.currentUser?.uid)
+        }
+        authentication.addAuthStateListener(listener)
+        trySend(authentication.currentUser?.uid)
+        awaitClose {
+            authentication.removeAuthStateListener(listener)
+        }
     }
 
     override fun observeOutlet(
@@ -115,6 +128,17 @@ class FirebaseOutletRepository(
             .document(homeId)
             .collection("alerts")
             .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+    override fun observeDeviceEvents(
+        homeId: String,
+        deviceId: String,
+    ): Flow<List<DeviceEvent>> = callbackFlow {
+        val registration = firestore
+            .collection("homes")
+            .document(homeId)
+            .collection("devices")
+            .document(deviceId)
+            .collection("events")
+            .orderBy("occurredAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .limit(200)
             .addSnapshotListener { snapshot, exception ->
                 when {
@@ -122,6 +146,9 @@ class FirebaseOutletRepository(
                     snapshot == null -> close(IllegalStateException("Report alert snapshot is missing."))
                     else -> runCatching {
                         snapshot.documents.map(DocumentSnapshot::toHomeAlert)
+                    snapshot == null -> close(IllegalStateException("Event snapshot is missing."))
+                    else -> runCatching {
+                        snapshot.documents.map(DocumentSnapshot::toDeviceEvent)
                     }.onSuccess(::trySend).onFailure(::close)
                 }
             }
@@ -350,7 +377,10 @@ private fun DocumentSnapshot.toSmartDevice(): SmartDevice {
             timezone = (config["schedule"] as? Map<*, *>)?.get("timezone") as? String ?: "Asia/Colombo",
         )
         DeviceProfile.CAMERA -> DeviceConfiguration.Camera(
+            mediaType = config["mediaType"] as? String ?: "SNAPSHOT",
             mediaUri = config["mediaUri"] as? String ?: "",
+            capturedAtMillis = (config["capturedAt"] as? com.google.firebase.Timestamp)
+                ?.toDate()?.time,
         )
     }
     return SmartDevice(
@@ -383,6 +413,27 @@ private fun DocumentSnapshot.toHomeAlert(): HomeAlert {
             ?: throw IllegalStateException("Alert message is missing."),
         createdAtMillis = getTimestamp("createdAt")?.toDate()?.time
             ?: throw IllegalStateException("Alert creation time is missing."),
+    )
+}
+
+private fun DocumentSnapshot.toDeviceEvent(): DeviceEvent {
+    val originValue = getString("origin")
+    val origin = EventOrigin.entries.firstOrNull { it.name == originValue }
+        ?: throw IllegalStateException("Invalid event origin: $originValue")
+    val metadata = get("metadata") as? Map<*, *> ?: emptyMap<String, Any>()
+    return DeviceEvent(
+        id = id,
+        type = getString("type")
+            ?: throw IllegalStateException("Event type is missing."),
+        fromStatus = getString("fromStatus")?.let(::parseDeviceStatus),
+        toStatus = getString("toStatus")?.let(::parseDeviceStatus),
+        origin = origin,
+        actorId = getString("actorId"),
+        requestId = getString("requestId"),
+        reason = getString("reason"),
+        occurredAtMillis = getTimestamp("occurredAt")?.toDate()?.time
+            ?: throw IllegalStateException("Event time is missing."),
+        channelId = metadata["channelId"] as? String,
     )
 }
 

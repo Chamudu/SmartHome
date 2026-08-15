@@ -286,6 +286,44 @@ button:focus-visible {
   font-size: 0.82rem;
 }
 
+.usage-panel {
+  padding: 22px 28px;
+  border-bottom: 1px solid #263345;
+}
+
+.usage-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.usage-heading .control-title {
+  margin: 0;
+}
+
+.usage-panel .telemetry-grid {
+  grid-template-columns: repeat(2, 1fr);
+  border-bottom: 0;
+}
+
+.usage-panel .telemetry-grid div {
+  padding: 14px 20px 14px 0;
+}
+
+.usage-channel {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+}
+
+.status-off {
+  border-color: #334155;
+  color: #cbd5e1;
+  background: transparent;
+}
+
+
 .outlet-glyph {
   display: flex;
   align-items: center;

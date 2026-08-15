@@ -6,20 +6,25 @@ import {
   type User,
 } from 'firebase/auth'
 import {
+  CollectionReference,
   collection,
   doc,
   addDoc,
+  limit,
   onSnapshot,
+  orderBy,
+  query,
   runTransaction,
   serverTimestamp,
-  updateDoc,
+  writeBatch,
 } from 'firebase/firestore'
 import { auth, db, homeId } from './firebase'
-import type { DeviceStatus, DeviceTwin } from './types'
+import type { DeviceEvent, DeviceStatus, DeviceTwin } from './types'
 
 export function useDeviceSimulator() {
   const [user, setUser] = useState<User | null>(null)
   const [devices, setDevices] = useState<DeviceTwin[]>([])
+  const [eventsByDevice, setEventsByDevice] = useState<Record<string, DeviceEvent[]>>({})
   const [listenerConnected, setListenerConnected] = useState(false)
   const [busyDeviceIds, setBusyDeviceIds] = useState<ReadonlySet<string>>(new Set())
   const [busyChannelKeys, setBusyChannelKeys] = useState<ReadonlySet<string>>(new Set())
@@ -27,6 +32,7 @@ export function useDeviceSimulator() {
   const [error, setError] = useState<string | null>(null)
   const acknowledgements = useRef(new Set<string>())
   const safetyTimers = useRef<Map<string, number>>(new Map())
+  const eventUnsubscribers = useRef(new Map<string, () => void>())
 
   useEffect(() => {
     if (!auth) return
@@ -36,11 +42,15 @@ export function useDeviceSimulator() {
   useEffect(() => {
     if (!user || !db || !homeId) {
       setDevices([])
+      setEventsByDevice({})
+      eventUnsubscribers.current.forEach((unsubscribe) => unsubscribe())
+      eventUnsubscribers.current.clear()
       setListenerConnected(false)
       return
     }
 
-    const devicesReference = collection(db, 'homes', homeId, 'devices')
+    const database = db
+    const devicesReference = collection(database, 'homes', homeId, 'devices')
     const unsubscribe = onSnapshot(
       devicesReference,
       (snapshot) => {
@@ -64,7 +74,8 @@ export function useDeviceSimulator() {
 
           if (requiresAcknowledgement) {
             acknowledgements.current.add(acknowledgementKey)
-            void updateDoc(doc(devicesReference, device.id), {
+const batch = writeBatch(database)
+            batch.update(doc(devicesReference, device.id), {
               'reported.status': device.desired.status,
               'reported.requestId': requestId,
               'reported.updatedAt': serverTimestamp(),
@@ -80,6 +91,25 @@ export function useDeviceSimulator() {
                 createdAt: serverTimestamp()
               })
             }).catch((cause: unknown) => {
+            })
+            if (device.reported.status !== device.desired.status) {
+              const origin = ackEventOrigin(device)
+              batch.set(
+                eventDocument(devicesReference, device.id, stateEventId('device', requestId)),
+                {
+                  type: 'STATE_REPORTED',
+                  fromStatus: device.reported.status,
+                  toStatus: device.desired.status,
+                  origin: origin.origin,
+                  actorId: origin.actorId,
+                  requestId,
+                  reason: null,
+                  occurredAt: serverTimestamp(),
+                  metadata: {},
+                },
+              )
+            }
+            void batch.commit().catch((cause: unknown) => {
               acknowledgements.current.delete(acknowledgementKey)
               setError(toMessage(cause))
             })
@@ -145,6 +175,44 @@ export function useDeviceSimulator() {
     return unsubscribe
   }, [user])
 
+  useEffect(() => {
+    if (!db || !homeId) return
+
+    const wantedDeviceIds = new Set(devices.map((device) => device.id))
+    eventUnsubscribers.current.forEach((unsubscribe, deviceId) => {
+      if (!wantedDeviceIds.has(deviceId)) {
+        unsubscribe()
+        eventUnsubscribers.current.delete(deviceId)
+      }
+    })
+
+    wantedDeviceIds.forEach((deviceId) => {
+      if (eventUnsubscribers.current.has(deviceId)) return
+      const eventsReference = collection(db!, 'homes', homeId!, 'devices', deviceId, 'events')
+      const unsubscribe = onSnapshot(
+        query(eventsReference, orderBy('occurredAt', 'desc'), limit(200)),
+        (snapshot) => {
+          setEventsByDevice((current) => ({
+            ...current,
+            [deviceId]: snapshot.docs.map((document) => ({
+              id: document.id,
+              ...document.data(),
+            }) as DeviceEvent),
+          }))
+        },
+        () => {
+          setEventsByDevice((current) => {
+            if (!(deviceId in current)) return current
+            const next = { ...current }
+            delete next[deviceId]
+            return next
+          })
+        },
+      )
+      eventUnsubscribers.current.set(deviceId, unsubscribe)
+    })
+  }, [devices])
+
   const signIn = useCallback(async (email: string, password: string) => {
     if (!auth) return
     setAuthBusy(true)
@@ -169,7 +237,8 @@ export function useDeviceSimulator() {
     setBusyDeviceIds((current) => new Set(current).add(deviceId))
     setError(null)
     try {
-      await updateDoc(doc(db, 'homes', homeId, 'devices', deviceId), {
+      const batch = writeBatch(db)
+      batch.update(doc(db, 'homes', homeId, 'devices', deviceId), {
         'reported.status': status,
         'reported.requestId': null,
         'reported.updatedAt': serverTimestamp(),
@@ -184,6 +253,28 @@ export function useDeviceSimulator() {
         message: `Device manually switched ${status}.`,
         createdAt: serverTimestamp()
       })
+      const current = devices.find((device) => device.id === deviceId)
+      if (current != null && current.reported.status !== status) {
+        batch.set(
+          eventDocument(
+            collection(db, 'homes', homeId, 'devices'),
+            deviceId,
+            manualEventId('device'),
+          ),
+          {
+            type: 'STATE_REPORTED',
+            fromStatus: current.reported.status,
+            toStatus: status,
+            origin: 'SIMULATOR',
+            actorId: null,
+            requestId: null,
+            reason: null,
+            occurredAt: serverTimestamp(),
+            metadata: {},
+          },
+        )
+      }
+      await batch.commit()
     } catch (cause) {
       setError(toMessage(cause))
     } finally {
@@ -193,7 +284,7 @@ export function useDeviceSimulator() {
         return next
       })
     }
-  }, [])
+  }, [devices])
 
   const reportChannelStatus = useCallback(async (
     deviceId: string,
@@ -205,6 +296,7 @@ export function useDeviceSimulator() {
     setBusyChannelKeys((current) => new Set(current).add(key))
     setError(null)
     try {
+      const eventId = manualEventId(channelId)
       await runTransaction(db, async (transaction) => {
         const reference = doc(db!, 'homes', homeId!, 'devices', deviceId)
         const snapshot = await transaction.get(reference)
@@ -212,6 +304,7 @@ export function useDeviceSimulator() {
         if (!device || device.profile !== 'MULTI_SWITCH' || !('channels' in device.config)) {
           throw new Error('Multi-switch channels are unavailable.')
         }
+        const before = device.config.channels.find((channel) => channel.id === channelId)
         const channels = device.config.channels.map((channel) =>
           channel.id === channelId ? { ...channel, reportedStatus: status } : channel)
         if (!channels.some((channel) => channel.id === channelId)) {
@@ -228,6 +321,25 @@ export function useDeviceSimulator() {
             message: `${current.name} manually switched ${status}.`,
             createdAt: serverTimestamp()
           })
+        if (before != null && before.reportedStatus !== status) {
+          transaction.set(
+            eventDocument(
+              collection(db!, 'homes', homeId!, 'devices'),
+              deviceId,
+              eventId,
+            ),
+            {
+              type: 'STATE_REPORTED',
+              fromStatus: before.reportedStatus,
+              toStatus: status,
+              origin: 'SIMULATOR',
+              actorId: null,
+              requestId: null,
+              reason: null,
+              occurredAt: serverTimestamp(),
+              metadata: { channelId },
+            },
+          )
         }
       })
     } catch (cause) {
@@ -244,6 +356,7 @@ export function useDeviceSimulator() {
   return {
     user,
     devices,
+    eventsByDevice,
     listenerConnected,
     busyDeviceIds,
     busyChannelKeys,
@@ -269,9 +382,11 @@ async function acknowledgeSwitchChannel(
     if (!device || device.profile !== 'MULTI_SWITCH' || !('channels' in device.config)) return
     const current = device.config.channels.find((channel) => channel.id === channelId)
     if (!current || current.requestId !== requestId) return
+    const beforeStatus = current.reportedStatus
+    const afterStatus = current.desiredStatus
     const channels = device.config.channels.map((channel) =>
       channel.id === channelId
-        ? { ...channel, reportedStatus: channel.desiredStatus }
+        ? { ...channel, reportedStatus: afterStatus }
         : channel)
     transaction.update(reference, { 'config.channels': channels, updatedAt: serverTimestamp() })
     const alertRef = doc(collection(db!, 'homes', homeId!, 'alerts'))
@@ -282,9 +397,54 @@ async function acknowledgeSwitchChannel(
       message: `${current.name} switched ${current.desiredStatus} via app.`,
       createdAt: serverTimestamp()
     })
+    if (beforeStatus !== afterStatus) {
+      transaction.set(
+        eventDocument(
+          collection(db!, 'homes', homeId!, 'devices'),
+          deviceId,
+          stateEventId(channelId, requestId),
+        ),
+        {
+          type: 'STATE_REPORTED',
+          fromStatus: beforeStatus,
+          toStatus: afterStatus,
+          origin: 'ANDROID',
+          actorId: null,
+          requestId,
+          reason: null,
+          occurredAt: serverTimestamp(),
+          metadata: { channelId },
+        },
+      )
+    }
   })
 }
 
 function toMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'An unexpected simulator error occurred.'
+}
+
+function eventDocument(
+  devicesReference: CollectionReference,
+  deviceId: string,
+  eventId: string,
+): ReturnType<typeof doc> {
+  return doc(devicesReference, deviceId, 'events', eventId)
+}
+
+function stateEventId(scope: string, requestId: string): string {
+  return `state-${scope}-${requestId}`
+}
+
+function manualEventId(scope: string): string {
+  return `state-${scope}-manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function ackEventOrigin(
+  device: DeviceTwin,
+): { origin: 'ANDROID' | 'SIMULATOR' | 'AUTOMATION'; actorId: string | null } {
+  const requestedBy = device.desired.requestedBy
+  if (requestedBy === 'AUTOMATION') return { origin: 'AUTOMATION', actorId: null }
+  if (requestedBy != null) return { origin: 'ANDROID', actorId: requestedBy }
+  return { origin: 'SIMULATOR', actorId: null }
 }
