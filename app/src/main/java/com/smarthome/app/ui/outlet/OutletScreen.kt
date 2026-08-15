@@ -364,6 +364,37 @@ private fun OutletDashboard(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+        if (state.isOffline || state.isRecovering) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        SmartHomeIcons.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(
+                        text = when {
+                            state.isOffline ->
+                                "Offline — showing cached data. Commands will retry automatically when the connection returns."
+                            else ->
+                                "Reconnecting… the latest state will appear shortly."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         PrimaryTabRow(selectedTabIndex = selectedTab) {
             Tab(
                 selected = selectedTab == 0,

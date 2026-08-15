@@ -19,6 +19,12 @@ interface OutletRepository {
 
     fun signOut()
 
+    /**
+     * Emits the current authenticated user id, or null once the session ends (sign-out, expiry, or
+     * revocation). Used to route the user back to the authentication flow.
+     */
+    fun observeAuthentication(): Flow<String?>
+
     fun observeOutlet(
         homeId: String,
         deviceId: String,

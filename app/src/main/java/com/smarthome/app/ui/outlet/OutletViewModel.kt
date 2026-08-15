@@ -2,8 +2,13 @@ package com.smarthome.app.ui.outlet
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.smarthome.app.SmartHomeApplication
 import com.smarthome.app.data.FirebaseFloorRepository
 import com.smarthome.app.data.FirebaseOutletRepository
+import com.smarthome.app.data.connectivity.NetworkMonitor
+import com.smarthome.app.data.recovery.FirestoreErrorClassifier
+import com.smarthome.app.data.recovery.commandBackoffMillis
+import com.smarthome.app.data.recovery.retryWithBackoff
 import com.smarthome.app.domain.model.FloorPlan
 import com.smarthome.app.domain.model.LayoutViolation
 import com.smarthome.app.domain.model.DeviceProfile
@@ -23,10 +28,12 @@ import com.smarthome.app.domain.repository.RoomContainsDevicesException
 import com.smarthome.app.domain.repository.OutletRepository
 import com.smarthome.app.domain.validation.FloorLayoutValidator
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -51,6 +58,8 @@ data class OutletUiState(
     val isLoadingEvents: Boolean = false,
     val eventsErrorMessage: String? = null,
     val errorMessage: String? = null,
+    val isOffline: Boolean = false,
+    val isRecovering: Boolean = false,
     val floors: List<FloorPlan> = emptyList(),
     val selectedFloorId: String? = null,
     val rooms: List<RoomLayout> = emptyList(),
@@ -67,6 +76,7 @@ data class OutletUiState(
 class OutletViewModel(
     private val repository: OutletRepository = FirebaseOutletRepository(),
     private val floorRepository: FloorRepository = FirebaseFloorRepository(),
+    private val networkMonitor: NetworkMonitor = SmartHomeApplication.networkMonitor,
 ) : ViewModel() {
 
     private val mutableUiState = MutableStateFlow(
@@ -84,8 +94,14 @@ class OutletViewModel(
     private var floorObservation: Job? = null
     private var roomObservation: Job? = null
     private val deviceEventJobs: MutableMap<String, Job> = mutableMapOf()
+    private var authenticationObservation: Job? = null
+    private var networkObservation: Job? = null
+    private var userInitiatedSignOut = false
+    private val pendingCommands: MutableMap<String, PendingCommand> = mutableMapOf()
 
     init {
+        observeAuthentication()
+        observeNetwork()
         if (repository.hasAuthenticatedUser) {
             observeOutlet()
             observeDevices()
@@ -149,11 +165,15 @@ class OutletViewModel(
                 observeDevices()
                 observeAlerts()
                 observeFloors()
-            }.onFailure {
+            }.onFailure { cause ->
                 mutableUiState.update {
                     it.copy(
                         isSigningIn = false,
-                        errorMessage = "Sign-in failed. Check your credentials and connection.",
+                        errorMessage = if (cause.isRecoverable()) {
+                            "Sign-in could not be completed. Check your connection and try again."
+                        } else {
+                            "Sign-in failed. Check your credentials and connection."
+                        },
                     )
                 }
             }
@@ -169,33 +189,22 @@ class OutletViewModel(
             return
         }
 
-        viewModelScope.launch {
-            mutableUiState.update {
-                it.copy(
-                    isSendingCommand = true,
-                    errorMessage = null,
-                )
-            }
+        mutableUiState.update { it.copy(errorMessage = null) }
 
-            runCatching {
+        executeCommand(
+            key = OUTLET_ID,
+            setInFlight = { value ->
+                mutableUiState.update { it.copy(isSendingCommand = value) }
+            },
+            action = {
                 repository.requestPowerState(
                     homeId = HOME_ID,
                     deviceId = OUTLET_ID,
                     powerState = powerState,
                 )
-            }.onSuccess {
-                mutableUiState.update {
-                    it.copy(isSendingCommand = false)
-                }
-            }.onFailure {
-                mutableUiState.update {
-                    it.copy(
-                        isSendingCommand = false,
-                        errorMessage = "The outlet command could not be sent.",
-                    )
-                }
-            }
-        }
+            },
+            failureMessage = "The outlet command could not be sent.",
+        )
     }
 
     fun requestSwitchChannelState(
@@ -212,28 +221,26 @@ class OutletViewModel(
             key in mutableUiState.value.switchCommandsInFlight
         ) return
 
-        viewModelScope.launch {
-            mutableUiState.update {
-                it.copy(
-                    switchCommandsInFlight = it.switchCommandsInFlight + key,
-                    errorMessage = null,
-                )
-            }
-            runCatching {
-                repository.requestSwitchChannelState(HOME_ID, deviceId, channelId, powerState)
-            }.onSuccess {
-                mutableUiState.update {
-                    it.copy(switchCommandsInFlight = it.switchCommandsInFlight - key)
-                }
-            }.onFailure {
+        mutableUiState.update { it.copy(errorMessage = null) }
+
+        executeCommand(
+            key = key,
+            setInFlight = { value ->
                 mutableUiState.update {
                     it.copy(
-                        switchCommandsInFlight = it.switchCommandsInFlight - key,
-                        errorMessage = "The switch channel command could not be sent.",
+                        switchCommandsInFlight = if (value) {
+                            it.switchCommandsInFlight + key
+                        } else {
+                            it.switchCommandsInFlight - key
+                        },
                     )
                 }
-            }
-        }
+            },
+            action = {
+                repository.requestSwitchChannelState(HOME_ID, deviceId, channelId, powerState)
+            },
+            failureMessage = "The switch channel command could not be sent.",
+        )
     }
 
     fun requestDevicePowerState(
@@ -252,28 +259,26 @@ class OutletViewModel(
             deviceId in state.deviceCommandsInFlight
         ) return
 
-        viewModelScope.launch {
-            mutableUiState.update {
-                it.copy(
-                    deviceCommandsInFlight = it.deviceCommandsInFlight + deviceId,
-                    errorMessage = null,
-                )
-            }
-            runCatching {
-                repository.requestPowerState(HOME_ID, deviceId, powerState)
-            }.onSuccess {
-                mutableUiState.update {
-                    it.copy(deviceCommandsInFlight = it.deviceCommandsInFlight - deviceId)
-                }
-            }.onFailure {
+        mutableUiState.update { it.copy(errorMessage = null) }
+
+        executeCommand(
+            key = deviceId,
+            setInFlight = { value ->
                 mutableUiState.update {
                     it.copy(
-                        deviceCommandsInFlight = it.deviceCommandsInFlight - deviceId,
-                        errorMessage = "The device command could not be sent.",
+                        deviceCommandsInFlight = if (value) {
+                            it.deviceCommandsInFlight + deviceId
+                        } else {
+                            it.deviceCommandsInFlight - deviceId
+                        },
                     )
                 }
-            }
-        }
+            },
+            action = {
+                repository.requestPowerState(HOME_ID, deviceId, powerState)
+            },
+            failureMessage = "The device command could not be sent.",
+        )
     }
 
     fun updateLightSchedule(
@@ -304,28 +309,26 @@ class OutletViewModel(
             return
         }
 
-        viewModelScope.launch {
-            mutableUiState.update {
-                it.copy(
-                    scheduleUpdatesInFlight = it.scheduleUpdatesInFlight + deviceId,
-                    errorMessage = null,
-                )
-            }
-            runCatching {
-                repository.updateLightSchedule(HOME_ID, deviceId, enabled, start, end, zone)
-            }.onSuccess {
-                mutableUiState.update {
-                    it.copy(scheduleUpdatesInFlight = it.scheduleUpdatesInFlight - deviceId)
-                }
-            }.onFailure {
+        mutableUiState.update { it.copy(errorMessage = null) }
+
+        executeCommand(
+            key = "schedule:$deviceId",
+            setInFlight = { value ->
                 mutableUiState.update {
                     it.copy(
-                        scheduleUpdatesInFlight = it.scheduleUpdatesInFlight - deviceId,
-                        errorMessage = "The light schedule could not be saved.",
+                        scheduleUpdatesInFlight = if (value) {
+                            it.scheduleUpdatesInFlight + deviceId
+                        } else {
+                            it.scheduleUpdatesInFlight - deviceId
+                        },
                     )
                 }
-            }
-        }
+            },
+            action = {
+                repository.updateLightSchedule(HOME_ID, deviceId, enabled, start, end, zone)
+            },
+            failureMessage = "The light schedule could not be saved.",
+        )
     }
 
     fun selectFloor(floorId: String) {
@@ -371,41 +374,36 @@ class OutletViewModel(
 
         if (mutableUiState.value.isSavingLayout) return
 
-        viewModelScope.launch {
-            mutableUiState.update { state ->
-                state.copy(
-                    isSavingLayout = true,
-                    layoutMessage = null,
-                )
-            }
-
-            runCatching {
-                floorRepository.createFloor(
+        var createdFloorId: String? = null
+        executeCommand(
+            key = "create-floor",
+            setInFlight = { value ->
+                mutableUiState.update { it.copy(isSavingLayout = value) }
+            },
+            action = {
+                createdFloorId = floorRepository.createFloor(
                     homeId = HOME_ID,
                     name = resolvedName,
                     level = level,
                     gridColumns = gridColumns,
                     gridRows = gridRows,
                 )
-            }.onSuccess { floorId ->
-                mutableUiState.update { state ->
-                    state.copy(
-                        selectedFloorId = floorId,
-                        rooms = emptyList(),
-                        isSavingLayout = false,
-                        layoutMessage = "Floor created.",
-                    )
+            },
+            failureMessage = "The floor could not be created.",
+            onSuccess = {
+                val floorId = createdFloorId
+                if (floorId != null) {
+                    mutableUiState.update { state ->
+                        state.copy(
+                            selectedFloorId = floorId,
+                            rooms = emptyList(),
+                            layoutMessage = "Floor created.",
+                        )
+                    }
+                    observeRooms(floorId)
                 }
-                observeRooms(floorId)
-            }.onFailure {
-                mutableUiState.update { state ->
-                    state.copy(
-                        isSavingLayout = false,
-                        layoutMessage = "The floor could not be created.",
-                    )
-                }
-            }
-        }
+            },
+        )
     }
 
     fun createRoom(
@@ -442,36 +440,17 @@ class OutletViewModel(
 
         if (mutableUiState.value.isSavingLayout) return
 
-        viewModelScope.launch {
-            mutableUiState.update { state ->
-                state.copy(
-                    isSavingLayout = true,
-                    layoutMessage = null,
-                )
-            }
-
-            runCatching {
+        saveLayout(
+            action = {
                 floorRepository.createRoom(
                     homeId = HOME_ID,
                     floorId = floor.id,
                     room = room,
                 )
-            }.onSuccess {
-                mutableUiState.update { state ->
-                    state.copy(
-                        isSavingLayout = false,
-                        layoutMessage = "Room created.",
-                    )
-                }
-            }.onFailure {
-                mutableUiState.update { state ->
-                    state.copy(
-                        isSavingLayout = false,
-                        layoutMessage = "The room could not be created.",
-                    )
-                }
-            }
-        }
+            },
+            successMessage = "Room created.",
+            failureMessage = "The room could not be created.",
+        )
     }
 
     fun updateSelectedFloor(
@@ -621,11 +600,13 @@ class OutletViewModel(
         }?.id
 
         if (mutableUiState.value.isCreatingDevice) return
-        viewModelScope.launch {
-            mutableUiState.update {
-                it.copy(isCreatingDevice = true, layoutMessage = null)
-            }
-            runCatching {
+
+        executeCommand(
+            key = "create-device",
+            setInFlight = { value ->
+                mutableUiState.update { it.copy(isCreatingDevice = value) }
+            },
+            action = {
                 repository.createDevice(
                     HOME_ID,
                     NewDevice(
@@ -640,19 +621,12 @@ class OutletViewModel(
                         mediaUri = mediaUri,
                     ),
                 )
-            }.onSuccess {
-                mutableUiState.update {
-                    it.copy(isCreatingDevice = false, layoutMessage = "Device created.")
-                }
-            }.onFailure {
-                mutableUiState.update {
-                    it.copy(
-                        isCreatingDevice = false,
-                        layoutMessage = "The device could not be created.",
-                    )
-                }
-            }
-        }
+            },
+            failureMessage = "The device could not be created.",
+            onSuccess = {
+                mutableUiState.update { it.copy(layoutMessage = "Device created.") }
+            },
+        )
     }
 
     fun moveDevice(deviceId: String, column: Int, row: Int) {
@@ -698,88 +672,74 @@ class OutletViewModel(
         val floorId = mutableUiState.value.selectedFloorId ?: return
         if (mutableUiState.value.isSavingLayout) return
 
-        viewModelScope.launch {
-            mutableUiState.update { state ->
-                state.copy(isSavingLayout = true, layoutMessage = null)
-            }
-
-            runCatching {
-                floorRepository.deleteFloor(HOME_ID, floorId)
-            }.onSuccess {
-                mutableUiState.update { state ->
-                    state.copy(
-                        isSavingLayout = false,
-                        layoutMessage = "Floor deleted.",
-                    )
-                }
-            }.onFailure { exception ->
-                val message = if (exception is FloorContainsDevicesException) {
-                    exception.message
-                } else {
-                    "The floor could not be deleted."
-                }
-                mutableUiState.update { state ->
-                    state.copy(
-                        isSavingLayout = false,
-                        layoutMessage = message,
-                    )
-                }
-            }
-        }
+        saveLayout(
+            action = { floorRepository.deleteFloor(HOME_ID, floorId) },
+            successMessage = "Floor deleted.",
+            failureMessage = "The floor could not be deleted.",
+            failureDetails = { exception ->
+                (exception as? FloorContainsDevicesException)?.message
+            },
+        )
     }
 
     fun deleteRoom(roomId: String) {
         val floorId = mutableUiState.value.selectedFloorId ?: return
         if (mutableUiState.value.isSavingLayout) return
 
-        viewModelScope.launch {
-            mutableUiState.update { state ->
-                state.copy(isSavingLayout = true, layoutMessage = null)
-            }
-
-            runCatching {
-                floorRepository.deleteRoom(HOME_ID, floorId, roomId)
-            }.onSuccess {
-                mutableUiState.update { state ->
-                    state.copy(
-                        isSavingLayout = false,
-                        layoutMessage = "Room deleted.",
-                    )
-                }
-            }.onFailure { exception ->
-                val message = if (exception is RoomContainsDevicesException) {
-                    exception.message
-                } else {
-                    "The room could not be deleted."
-                }
-                mutableUiState.update { state ->
-                    state.copy(
-                        isSavingLayout = false,
-                        layoutMessage = message,
-                    )
-                }
-            }
-        }
+        saveLayout(
+            action = { floorRepository.deleteRoom(HOME_ID, floorId, roomId) },
+            successMessage = "Room deleted.",
+            failureMessage = "The room could not be deleted.",
+            failureDetails = { exception ->
+                (exception as? RoomContainsDevicesException)?.message
+            },
+        )
     }
 
     fun signOut() {
-        outletObservation?.cancel()
-        outletObservation = null
-        deviceObservation?.cancel()
-        deviceObservation = null
-        alertObservation?.cancel()
-        alertObservation = null
-        floorObservation?.cancel()
-        floorObservation = null
-        roomObservation?.cancel()
-        roomObservation = null
-        deviceEventJobs.values.forEach(Job::cancel)
-        deviceEventJobs.clear()
+        userInitiatedSignOut = true
+        cancelObservations()
+        pendingCommands.clear()
         repository.signOut()
 
         mutableUiState.value = OutletUiState(
             email = mutableUiState.value.email,
         )
+        userInitiatedSignOut = false
+    }
+
+    private fun observeAuthentication() {
+        authenticationObservation?.cancel()
+
+        authenticationObservation = viewModelScope.launch {
+            repository
+                .observeAuthentication()
+                .distinctUntilChanged()
+                .collect { uid ->
+                    if (uid == null &&
+                        mutableUiState.value.isAuthenticated &&
+                        !userInitiatedSignOut
+                    ) {
+                        resetToSignedOut()
+                    }
+                }
+        }
+    }
+
+    private fun observeNetwork() {
+        networkObservation?.cancel()
+
+        networkObservation = viewModelScope.launch {
+            var wasOnline = networkMonitor.isOnline.value
+            networkMonitor.isOnline
+                .collect { online ->
+                    mutableUiState.update { it.copy(isOffline = !online) }
+                    if (online && !wasOnline) {
+                        flushPendingCommands()
+                    }
+                    wasOnline = online
+                }
+        }
     }
 
     private fun observeOutlet() {
@@ -798,12 +758,21 @@ class OutletViewModel(
                     homeId = HOME_ID,
                     deviceId = OUTLET_ID,
                 )
-                .catch {
-                    mutableUiState.update { state ->
-                        state.copy(
-                            isLoadingOutlet = false,
-                            errorMessage = "The outlet could not be loaded.",
-                        )
+                .retryWithBackoff(
+                    isRetryable = { cause -> cause.isRecoverable() },
+                    onRetry = { _, _ ->
+                        mutableUiState.update { it.copy(isRecovering = true) }
+                    },
+                )
+                .catch { cause ->
+                    when {
+                        cause.isSessionRevoked() -> resetToSignedOut()
+                        else -> mutableUiState.update { state ->
+                            state.copy(
+                                isLoadingOutlet = false,
+                                errorMessage = "The outlet could not be loaded.",
+                            )
+                        }
                     }
                 }
                 .collect { outlet ->
@@ -812,6 +781,7 @@ class OutletViewModel(
                             isLoadingOutlet = false,
                             outlet = outlet,
                             errorMessage = null,
+                            isRecovering = false,
                         )
                     }
                 }
@@ -823,12 +793,21 @@ class OutletViewModel(
         mutableUiState.update { it.copy(isLoadingDevices = true) }
         deviceObservation = viewModelScope.launch {
             repository.observeDevices(HOME_ID)
-                .catch {
-                    mutableUiState.update {
-                        it.copy(
-                            isLoadingDevices = false,
-                            errorMessage = "Devices could not be loaded.",
-                        )
+                .retryWithBackoff(
+                    isRetryable = { cause -> cause.isRecoverable() },
+                    onRetry = { _, _ ->
+                        mutableUiState.update { it.copy(isRecovering = true) }
+                    },
+                )
+                .catch { cause ->
+                    when {
+                        cause.isSessionRevoked() -> resetToSignedOut()
+                        else -> mutableUiState.update {
+                            it.copy(
+                                isLoadingDevices = false,
+                                errorMessage = "Devices could not be loaded.",
+                            )
+                        }
                     }
                 }
                 .collect { devices ->
@@ -837,6 +816,7 @@ class OutletViewModel(
                             devices = devices,
                             isLoadingDevices = false,
                             errorMessage = null,
+                            isRecovering = false,
                         )
                     }
                     observeDeviceEvents(devices)
@@ -859,12 +839,21 @@ class OutletViewModel(
             if (deviceEventJobs.containsKey(deviceId)) return@forEach
             val job = viewModelScope.launch {
                 repository.observeDeviceEvents(HOME_ID, deviceId)
-                    .catch {
-                        mutableUiState.update { state ->
-                            state.copy(
-                                isLoadingEvents = false,
-                                eventsErrorMessage = "Usage history could not be loaded.",
-                            )
+                    .retryWithBackoff(
+                        isRetryable = { cause -> cause.isRecoverable() },
+                        onRetry = { _, _ ->
+                            mutableUiState.update { it.copy(isRecovering = true) }
+                        },
+                    )
+                    .catch { cause ->
+                        when {
+                            cause.isSessionRevoked() -> resetToSignedOut()
+                            else -> mutableUiState.update { state ->
+                                state.copy(
+                                    isLoadingEvents = false,
+                                    eventsErrorMessage = "Usage history could not be loaded.",
+                                )
+                            }
                         }
                     }
                     .collect { events ->
@@ -873,6 +862,7 @@ class OutletViewModel(
                                 eventsByDevice = state.eventsByDevice + (deviceId to events),
                                 isLoadingEvents = false,
                                 eventsErrorMessage = null,
+                                isRecovering = false,
                             )
                         }
                     }
@@ -886,12 +876,21 @@ class OutletViewModel(
         mutableUiState.update { it.copy(isLoadingAlerts = true) }
         alertObservation = viewModelScope.launch {
             repository.observeAlerts(HOME_ID)
-                .catch {
-                    mutableUiState.update {
-                        it.copy(
-                            isLoadingAlerts = false,
-                            errorMessage = "Safety alerts could not be loaded.",
-                        )
+                .retryWithBackoff(
+                    isRetryable = { cause -> cause.isRecoverable() },
+                    onRetry = { _, _ ->
+                        mutableUiState.update { it.copy(isRecovering = true) }
+                    },
+                )
+                .catch { cause ->
+                    when {
+                        cause.isSessionRevoked() -> resetToSignedOut()
+                        else -> mutableUiState.update {
+                            it.copy(
+                                isLoadingAlerts = false,
+                                errorMessage = "Safety alerts could not be loaded.",
+                            )
+                        }
                     }
                 }
                 .collect { alerts ->
@@ -900,6 +899,7 @@ class OutletViewModel(
                             alerts = alerts,
                             isLoadingAlerts = false,
                             errorMessage = null,
+                            isRecovering = false,
                         )
                     }
                 }
@@ -919,12 +919,21 @@ class OutletViewModel(
         floorObservation = viewModelScope.launch {
             floorRepository
                 .observeFloors(HOME_ID)
-                .catch {
-                    mutableUiState.update { state ->
-                        state.copy(
-                            isLoadingFloors = false,
-                            layoutMessage = "Floor plans could not be loaded.",
-                        )
+                .retryWithBackoff(
+                    isRetryable = { cause -> cause.isRecoverable() },
+                    onRetry = { _, _ ->
+                        mutableUiState.update { it.copy(isRecovering = true) }
+                    },
+                )
+                .catch { cause ->
+                    when {
+                        cause.isSessionRevoked() -> resetToSignedOut()
+                        else -> mutableUiState.update { state ->
+                            state.copy(
+                                isLoadingFloors = false,
+                                layoutMessage = "Floor plans could not be loaded.",
+                            )
+                        }
                     }
                 }
                 .collect { floors ->
@@ -940,6 +949,7 @@ class OutletViewModel(
                             floors = floors,
                             selectedFloorId = selectedFloorId,
                             isLoadingFloors = false,
+                            isRecovering = false,
                         )
                     }
 
@@ -966,53 +976,211 @@ class OutletViewModel(
                     homeId = HOME_ID,
                     floorId = floorId,
                 )
-                .catch {
-                    mutableUiState.update { state ->
-                        state.copy(
-                            rooms = emptyList(),
-                            layoutMessage = "Rooms could not be loaded.",
-                        )
+                .retryWithBackoff(
+                    isRetryable = { cause -> cause.isRecoverable() },
+                    onRetry = { _, _ ->
+                        mutableUiState.update { it.copy(isRecovering = true) }
+                    },
+                )
+                .catch { cause ->
+                    when {
+                        cause.isSessionRevoked() -> resetToSignedOut()
+                        else -> mutableUiState.update { state ->
+                            state.copy(
+                                rooms = emptyList(),
+                                layoutMessage = "Rooms could not be loaded.",
+                            )
+                        }
                     }
                 }
                 .collect { rooms ->
                     if (mutableUiState.value.selectedFloorId == floorId) {
                         mutableUiState.update { state ->
-                            state.copy(rooms = rooms)
+                            state.copy(rooms = rooms, isRecovering = false)
                         }
                     }
                 }
         }
     }
 
+    private fun executeCommand(
+        key: String,
+        setInFlight: (Boolean) -> Unit,
+        action: suspend () -> Unit,
+        failureMessage: String,
+        onSuccess: () -> Unit = {},
+        onFailure: (Throwable) -> Unit = { _ ->
+            mutableUiState.update { it.copy(errorMessage = failureMessage) }
+        },
+    ) {
+        viewModelScope.launch {
+            setInFlight(true)
+            var attempt = 0
+            while (true) {
+                val cause = runCatching { action() }.exceptionOrNull()
+
+                if (cause == null) {
+                    pendingCommands.remove(key)
+                    setInFlight(false)
+                    onSuccess()
+                    mutableUiState.update {
+                        it.copy(isRecovering = pendingCommands.isNotEmpty())
+                    }
+                    return@launch
+                }
+
+                when {
+                    cause.isSessionRevoked() -> {
+                        pendingCommands.remove(key)
+                        setInFlight(false)
+                        mutableUiState.update { it.copy(isRecovering = false) }
+                        resetToSignedOut()
+                        return@launch
+                    }
+
+                    !cause.isRecoverable() -> {
+                        pendingCommands.remove(key)
+                        setInFlight(false)
+                        onFailure(cause)
+                        mutableUiState.update {
+                            it.copy(isRecovering = pendingCommands.isNotEmpty())
+                        }
+                        return@launch
+                    }
+
+                    !networkMonitor.isOnline.value -> {
+                        pendingCommands[key] = PendingCommand(
+                            key = key,
+                            setInFlight = setInFlight,
+                            action = action,
+                            failureMessage = failureMessage,
+                            onSuccess = onSuccess,
+                            onFailure = onFailure,
+                        )
+                        mutableUiState.update { it.copy(isRecovering = true) }
+                        return@launch
+                    }
+
+                    attempt >= MAX_COMMAND_RETRIES -> {
+                        pendingCommands.remove(key)
+                        setInFlight(false)
+                        onFailure(cause)
+                        mutableUiState.update {
+                            it.copy(isRecovering = pendingCommands.isNotEmpty())
+                        }
+                        return@launch
+                    }
+
+                    else -> {
+                        mutableUiState.update { it.copy(isRecovering = true) }
+                        attempt += 1
+                        delay(
+                            commandBackoffMillis(
+                                attempt,
+                                baseDelayMillis = COMMAND_RETRY_BASE_MILLIS,
+                                maxDelayMillis = COMMAND_RETRY_MAX_MILLIS,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun flushPendingCommands() {
+        val commands = pendingCommands.values.toList()
+        if (commands.isEmpty()) return
+
+        pendingCommands.clear()
+        commands.forEach { command ->
+            executeCommand(
+                key = command.key,
+                setInFlight = command.setInFlight,
+                action = command.action,
+                failureMessage = command.failureMessage,
+                onSuccess = command.onSuccess,
+                onFailure = command.onFailure,
+            )
+        }
+        mutableUiState.update { it.copy(isRecovering = pendingCommands.isNotEmpty()) }
+    }
+
+    private fun resetToSignedOut(message: String? = null) {
+        userInitiatedSignOut = true
+        cancelObservations()
+        pendingCommands.clear()
+        repository.signOut()
+
+        mutableUiState.value = OutletUiState(
+            email = mutableUiState.value.email,
+            errorMessage = message ?: SESSION_EXPIRED_MESSAGE,
+        )
+        userInitiatedSignOut = false
+    }
+
+    private fun cancelObservations() {
+        outletObservation?.cancel()
+        outletObservation = null
+        deviceObservation?.cancel()
+        deviceObservation = null
+        alertObservation?.cancel()
+        alertObservation = null
+        floorObservation?.cancel()
+        floorObservation = null
+        roomObservation?.cancel()
+        roomObservation = null
+        deviceEventJobs.values.forEach(Job::cancel)
+        deviceEventJobs.clear()
+    }
+
     private fun saveLayout(
         action: suspend () -> Unit,
         successMessage: String,
         failureMessage: String,
+        failureDetails: (Throwable) -> String? = { null },
     ) {
         if (mutableUiState.value.isSavingLayout) return
 
-        viewModelScope.launch {
-            mutableUiState.update { it.copy(isSavingLayout = true, layoutMessage = null) }
-            runCatching { action() }
-                .onSuccess {
-                    mutableUiState.update {
-                        it.copy(isSavingLayout = false, layoutMessage = successMessage)
-                    }
-                }
-                .onFailure {
-                    mutableUiState.update {
-                        it.copy(isSavingLayout = false, layoutMessage = failureMessage)
-                    }
-                }
-        }
+        executeCommand(
+            key = "layout",
+            setInFlight = { value ->
+                mutableUiState.update { it.copy(isSavingLayout = value) }
+            },
+            action = action,
+            failureMessage = failureMessage,
+            onSuccess = {
+                mutableUiState.update { it.copy(layoutMessage = successMessage) }
+            },
+            onFailure = { cause ->
+                val message = failureDetails(cause) ?: failureMessage
+                mutableUiState.update { it.copy(layoutMessage = message) }
+            },
+        )
     }
 
     private companion object {
         const val HOME_ID = "demo-home"
         const val OUTLET_ID = "main-outlet"
+        const val MAX_COMMAND_RETRIES = 4
+        const val COMMAND_RETRY_BASE_MILLIS = 500L
+        const val COMMAND_RETRY_MAX_MILLIS = 8_000L
+        const val SESSION_EXPIRED_MESSAGE = "Your session has expired. Please sign in again."
         val TIME_PATTERN = Regex("(?:[01]\\d|2[0-3]):[0-5]\\d")
     }
 }
+
+private class PendingCommand(
+    val key: String,
+    val setInFlight: (Boolean) -> Unit,
+    val action: suspend () -> Unit,
+    val failureMessage: String,
+    val onSuccess: () -> Unit,
+    val onFailure: (Throwable) -> Unit,
+)
+
+private fun Throwable.isRecoverable(): Boolean = FirestoreErrorClassifier.isRecoverable(this)
+
+private fun Throwable.isSessionRevoked(): Boolean = FirestoreErrorClassifier.isSessionRevoked(this)
 
 private fun Set<LayoutViolation>.toMessage(): String {
     return when {

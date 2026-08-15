@@ -48,6 +48,17 @@ class FirebaseOutletRepository(
         authentication.signOut()
     }
 
+    override fun observeAuthentication(): Flow<String?> = callbackFlow {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            trySend(auth.currentUser?.uid)
+        }
+        authentication.addAuthStateListener(listener)
+        trySend(authentication.currentUser?.uid)
+        awaitClose {
+            authentication.removeAuthStateListener(listener)
+        }
+    }
+
     override fun observeOutlet(
         homeId: String,
         deviceId: String,
