@@ -9,6 +9,11 @@ import {
   formatDuration,
   type UsageEvent,
 } from './usage'
+import {
+  estimateReport,
+  formatCost,
+  formatEnergy,
+} from './energy'
 import type { DeviceConfig, DeviceEvent, DeviceProfile, DeviceStatus, DeviceTwin } from './types'
 
 const statusOptions: DeviceStatus[] = ['ON', 'OFF', 'ERROR', 'DISCONNECTED']
@@ -158,6 +163,10 @@ function DeviceCard({ device, events, busy, busyChannelKeys, onReport, onReportC
     })
   }, [events, device.reported.status])
   const hasOngoing = usage.entries.some((entry) => entry.usage.ongoing)
+  const energyEstimate = useMemo(
+    () => estimateReport(device.profile, usage),
+    [device.profile, usage],
+  )
 
   return (
     <article className="device-card">
@@ -183,6 +192,8 @@ function DeviceCard({ device, events, busy, busyChannelKeys, onReport, onReportC
         <dl className="telemetry-grid">
           <div><dt>Activations</dt><dd>{usage.totalActivations}</dd></div>
           <div><dt>Active time</dt><dd>{formatDuration(usage.totalDurationMillis)}</dd></div>
+          <div><dt>Est. energy</dt><dd>{formatEnergy(energyEstimate.energyKwh)}</dd></div>
+          <div><dt>Est. cost</dt><dd>{formatCost(energyEstimate.cost)}</dd></div>
         </dl>
         {usage.entries.filter((entry) => entry.key !== '').map((entry) => (
           <p className="muted usage-channel" key={entry.key}>

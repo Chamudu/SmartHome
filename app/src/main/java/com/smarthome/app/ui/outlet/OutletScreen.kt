@@ -61,6 +61,8 @@ import com.smarthome.app.domain.model.CameraConnectivity
 import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.model.HomeAlert
 import com.smarthome.app.domain.model.toCameraConnectivity
+import com.smarthome.app.domain.usage.EnergyEstimator
+import com.smarthome.app.domain.usage.EnergyEstimate
 import com.smarthome.app.domain.usage.UsageCalculator
 import com.smarthome.app.domain.usage.UsageReport
 import com.smarthome.app.ui.theme.SmartHomeIcons
@@ -967,6 +969,11 @@ private fun formatEventTime(millis: Long): String {
     return EVENT_TIME_FORMAT.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
 }
 
+private fun formatCost(cost: Double): String {
+    val cents = Math.round(cost * 100).toLong()
+    return "$${cents / 100}.${(cents % 100).toString().padStart(2, '0')}"
+}
+
 @Composable
 private fun ActivitySection(
     devices: List<SmartDevice>,
@@ -1002,6 +1009,13 @@ private fun ActivitySection(
     }
     val totalActivations = deviceReports.sumOf { it.second.totalActivations }
     val totalDurationMillis = deviceReports.sumOf { it.second.totalDurationMillis }
+    val deviceEstimates = remember(deviceReports) {
+        deviceReports.associate { (device, report) ->
+            device.id to EnergyEstimator.estimateReport(device.profile, report)
+        }
+    }
+    val totalEnergyKwh = deviceEstimates.values.sumOf { it.energyKwh }
+    val totalCost = deviceEstimates.values.sumOf { it.cost }
 
     val recentEvents = remember(eventsByDevice) {
         eventsByDevice
@@ -1017,7 +1031,8 @@ private fun ActivitySection(
         Text("Usage", style = MaterialTheme.typography.headlineSmall)
         Text(
             "Usage pairs ON/OFF events into activation counts and active time. " +
-                "Incomplete intervals are bounded to the selected period.",
+                "Energy is estimated from assumed per-profile wattage; incomplete " +
+                "intervals are bounded to the selected period.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1062,6 +1077,26 @@ private fun ActivitySection(
             )
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SummaryTile(
+                label = "Est. energy",
+                value = EnergyEstimator.formatEnergy(totalEnergyKwh),
+                icon = SmartHomeIcons.Usage,
+                modifier = Modifier.weight(1f),
+            )
+            SummaryTile(
+                label = "Est. cost",
+                value = formatCost(totalCost),
+                icon = SmartHomeIcons.Activity,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
         Text("Per-device usage", style = MaterialTheme.typography.titleLarge)
         when {
             isLoading -> {
@@ -1075,7 +1110,12 @@ private fun ActivitySection(
             )
 
             else -> deviceReports.forEach { (device, report) ->
-                UsageCard(device = device, report = report, periodLabel = periodLabel)
+                UsageCard(
+                    device = device,
+                    report = report,
+                    periodLabel = periodLabel,
+                    estimate = deviceEstimates[device.id] ?: EnergyEstimate(0.0, 0.0),
+                )
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }
@@ -1103,6 +1143,7 @@ private fun UsageCard(
     device: SmartDevice,
     report: UsageReport,
     periodLabel: String,
+    estimate: EnergyEstimate,
 ) {
     val channelNames = (device.configuration as? DeviceConfiguration.MultiSwitch)
         ?.channels
@@ -1149,6 +1190,13 @@ private fun UsageCard(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Est. energy ${EnergyEstimator.formatEnergy(estimate.energyKwh)} · " +
+                    "Est. cost ${formatCost(estimate.cost)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             if (channelEntries.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 HorizontalDivider()
