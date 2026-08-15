@@ -12,6 +12,8 @@ import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.HomeAlert
 import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.model.DeviceConfiguration
+import com.smarthome.app.domain.model.DeviceEvent
+import com.smarthome.app.domain.model.EventOrigin
 import com.smarthome.app.domain.model.SwitchChannel
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.OutletRepository
@@ -59,6 +61,49 @@ class OutletViewModelTest {
 
             assertEquals("alert-1", viewModel.uiState.value.alerts.single().id)
             assertFalse(viewModel.uiState.value.isLoadingAlerts)
+
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `recorded device events are exposed in realtime UI state`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val repository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val viewModel = OutletViewModel(repository, FakeFloorRepository())
+            advanceUntilIdle()
+
+            repository.emitDevices(listOf(lightDevice()))
+            advanceUntilIdle()
+
+            repository.emitEvents(
+                listOf(
+                    DeviceEvent(
+                        id = "state-request-1",
+                        type = "STATE_REPORTED",
+                        fromStatus = DeviceStatus.OFF,
+                        toStatus = DeviceStatus.ON,
+                        origin = EventOrigin.ANDROID,
+                        actorId = "owner",
+                        requestId = "request-1",
+                        reason = null,
+                        occurredAtMillis = 1234L,
+                        channelId = null,
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                "state-request-1",
+                viewModel.uiState.value.eventsByDevice["porch-light"]?.single()?.id,
+            )
+            assertFalse(viewModel.uiState.value.isLoadingEvents)
 
             viewModel.signOut()
         } finally {
@@ -520,6 +565,7 @@ private class FakeOutletRepository(
     private val outlets = MutableSharedFlow<OutletDevice>(replay = 1)
     private val devices = MutableSharedFlow<List<SmartDevice>>(replay = 1)
     private val alerts = MutableSharedFlow<List<HomeAlert>>(replay = 1)
+    private val events = MutableSharedFlow<List<DeviceEvent>>(replay = 1)
 
     var signedInEmail: String? = null
         private set
@@ -565,6 +611,8 @@ private class FakeOutletRepository(
     override fun observeDevices(homeId: String): Flow<List<SmartDevice>> = devices
 
     override fun observeAlerts(homeId: String): Flow<List<HomeAlert>> = alerts
+
+    override fun observeDeviceEvents(homeId: String, deviceId: String): Flow<List<DeviceEvent>> = events
 
     override suspend fun createDevice(homeId: String, device: NewDevice): String {
         createdDevice = device
@@ -638,6 +686,10 @@ private class FakeOutletRepository(
 
     suspend fun emitDevices(value: List<SmartDevice>) {
         devices.emit(value)
+    }
+
+    suspend fun emitEvents(value: List<DeviceEvent>) {
+        events.emit(value)
     }
 }
 

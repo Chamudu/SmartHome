@@ -53,12 +53,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.smarthome.app.domain.model.DeviceStatus
 import com.smarthome.app.domain.model.DeviceProfile
 import com.smarthome.app.domain.model.DeviceConfiguration
+import com.smarthome.app.domain.model.DeviceEvent
 import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.model.HomeAlert
+import com.smarthome.app.domain.usage.UsageCalculator
+import com.smarthome.app.domain.usage.UsageReport
 import com.smarthome.app.ui.theme.SmartHomeIcons
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -339,7 +346,7 @@ private fun OutletDashboard(
                     }
                 }
 
-                TextButton(onClick = { selectedTab = 2 }) {
+                TextButton(onClick = { selectedTab = 3 }) {
                     Icon(
                         SmartHomeIcons.Profile,
                         contentDescription = null,
@@ -363,12 +370,18 @@ private fun OutletDashboard(
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("Layout") },
-                icon = { Icon(SmartHomeIcons.Layout, contentDescription = null) },
+                text = { Text("Activity") },
+                icon = { Icon(SmartHomeIcons.Activity, contentDescription = null) },
             )
             Tab(
                 selected = selectedTab == 2,
                 onClick = { selectedTab = 2 },
+                text = { Text("Layout") },
+                icon = { Icon(SmartHomeIcons.Layout, contentDescription = null) },
+            )
+            Tab(
+                selected = selectedTab == 3,
+                onClick = { selectedTab = 3 },
                 text = { Text("Profile") },
                 icon = { Icon(SmartHomeIcons.Profile, contentDescription = null) },
             )
@@ -513,6 +526,13 @@ private fun OutletDashboard(
                 }
             }
         } else if (selectedTab == 1) {
+            ActivitySection(
+                devices = state.devices,
+                eventsByDevice = state.eventsByDevice,
+                isLoading = state.isLoadingEvents,
+                eventsErrorMessage = state.eventsErrorMessage,
+            )
+        } else if (selectedTab == 2) {
             FloorDashboardSection(
                 state = state,
                 onFloorSelected = onFloorSelected,
@@ -901,6 +921,263 @@ private fun ProfileSection(
                     Text("Sign out")
                 }
             }
+        }
+    }
+}
+
+private val EVENT_TIME_FORMAT = DateTimeFormatter.ofPattern("MMM d, HH:mm")
+
+private fun formatEventTime(millis: Long): String {
+    return EVENT_TIME_FORMAT.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
+}
+
+@Composable
+private fun ActivitySection(
+    devices: List<SmartDevice>,
+    eventsByDevice: Map<String, List<DeviceEvent>>,
+    isLoading: Boolean,
+    eventsErrorMessage: String?,
+) {
+    var periodLabel by rememberSaveable { mutableStateOf("7 days") }
+    val periodOptions = listOf("Today", "7 days", "30 days")
+    val zone = ZoneId.systemDefault()
+    val nowMillis = System.currentTimeMillis()
+    val periodStart = remember(periodLabel, nowMillis) {
+        when (periodLabel) {
+            "Today" -> LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+            "30 days" -> nowMillis - 30L * 24 * 60 * 60 * 1000
+            else -> nowMillis - 7L * 24 * 60 * 60 * 1000
+        }
+    }
+
+    val latestEventMillis = remember(eventsByDevice) {
+        eventsByDevice.values.flatten().maxOfOrNull { it.occurredAtMillis }
+    }
+    val periodEndMillis = maxOf(nowMillis, latestEventMillis ?: nowMillis)
+
+    val deviceReports = remember(devices, eventsByDevice, periodStart, periodEndMillis) {
+        devices.map { device ->
+            device to UsageCalculator.report(
+                events = eventsByDevice[device.id].orEmpty(),
+                periodStartMillis = periodStart,
+                periodEndMillis = periodEndMillis,
+            )
+        }
+    }
+    val totalActivations = deviceReports.sumOf { it.second.totalActivations }
+    val totalDurationMillis = deviceReports.sumOf { it.second.totalDurationMillis }
+
+    val recentEvents = remember(eventsByDevice) {
+        eventsByDevice
+            .flatMap { (deviceId, events) -> events.map { deviceId to it } }
+            .sortedByDescending { it.second.occurredAtMillis }
+            .take(20)
+    }
+    val deviceNames = remember(devices) {
+        devices.associate { it.id to it.name }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Activity", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Usage pairs ON/OFF events into activation counts and active time. " +
+                "Incomplete intervals are bounded to the selected period.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        eventsErrorMessage?.let { message ->
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            periodOptions.forEach { option ->
+                FilterChip(
+                    selected = periodLabel == option,
+                    onClick = { periodLabel = option },
+                    label = { Text(option) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SummaryTile(
+                label = "Activations",
+                value = totalActivations.toString(),
+                icon = SmartHomeIcons.Activity,
+                modifier = Modifier.weight(1f),
+            )
+            SummaryTile(
+                label = "Active time",
+                value = UsageCalculator.formatDuration(totalDurationMillis),
+                icon = SmartHomeIcons.Schedule,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        Text("Per-device usage", style = MaterialTheme.typography.titleLarge)
+        when {
+            isLoading -> {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                Text("Loading activity…", style = MaterialTheme.typography.bodyMedium)
+            }
+
+            devices.isEmpty() -> Text(
+                "No devices yet. Add one from the Layout tab.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            else -> deviceReports.forEach { (device, report) ->
+                UsageCard(device = device, report = report, periodLabel = periodLabel)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+
+        Text("Recent events", style = MaterialTheme.typography.titleLarge)
+        if (recentEvents.isEmpty()) {
+            Text(
+                "No events recorded yet. Toggle a device to generate usage history.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        } else {
+            recentEvents.forEach { (deviceId, event) ->
+                EventRow(
+                    event = event,
+                    deviceName = deviceNames[deviceId] ?: "Unknown device",
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsageCard(
+    device: SmartDevice,
+    report: UsageReport,
+    periodLabel: String,
+) {
+    val channelNames = (device.configuration as? DeviceConfiguration.MultiSwitch)
+        ?.channels
+        ?.associate { it.id to it.name }
+        .orEmpty()
+    val channelEntries = report.entries.filter { it.key.isNotEmpty() }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        deviceProfileIcon(device.profile),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.size(10.dp))
+                    Column {
+                        Text(device.name, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "${device.profile.displayName} · $periodLabel",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Text(
+                        "${report.totalActivations} activations · " +
+                            UsageCalculator.formatDuration(report.totalDurationMillis),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+            if (channelEntries.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider()
+                channelEntries.forEach { entry ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            channelNames[entry.key] ?: "Channel ${entry.key}",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            buildString {
+                                append(entry.usage.activationCount)
+                                append(" · ")
+                                append(UsageCalculator.formatDuration(entry.usage.durationMillis))
+                                if (entry.usage.ongoing) append(" · active now")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EventRow(
+    event: DeviceEvent,
+    deviceName: String,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    buildString {
+                        append(deviceName)
+                        append(" → ")
+                        append(event.toStatus?.name ?: event.type)
+                        if (event.channelId != null) append(" · ${event.channelId}")
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "${event.origin.name} · ${event.type}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                formatEventTime(event.occurredAtMillis),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

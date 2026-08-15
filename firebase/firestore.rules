@@ -200,6 +200,33 @@ service cloud.firestore {
         ));
     }
 
+    function validEventOrigin(origin) {
+      return origin in ['ANDROID', 'SIMULATOR', 'AUTOMATION', 'SYSTEM'];
+    }
+
+    function validEventMetadata(metadata) {
+      return metadata is map
+        && metadata.keys().hasOnly(['channelId'])
+        && (!('channelId' in metadata) || metadata.channelId is string);
+    }
+
+    function validEventData(data) {
+      return data.keys().hasOnly([
+          'type', 'fromStatus', 'toStatus', 'origin', 'actorId',
+          'requestId', 'reason', 'occurredAt', 'metadata'
+        ])
+        && data.type is string
+        && data.type.size() > 0
+        && (data.fromStatus == null || validStatus(data.fromStatus))
+        && validStatus(data.toStatus)
+        && validEventOrigin(data.origin)
+        && (data.actorId == null || data.actorId is string)
+        && (data.requestId == null || data.requestId is string)
+        && (data.reason == null || data.reason is string)
+        && data.occurredAt is timestamp
+        && validEventMetadata(data.metadata);
+    }
+
     function validNewDevice(homeId, data) {
       return data.keys().hasOnly([
           'name', 'profile', 'floorId', 'roomId', 'position', 'desired',
@@ -291,7 +318,9 @@ service cloud.firestore {
 
         match /events/{eventId} {
           allow read: if activeMember(homeId);
-          allow write: if false;
+          allow create: if hasRole(homeId, ['SIMULATOR'])
+            && validEventData(request.resource.data);
+          allow update, delete: if false;
         }
       }
 

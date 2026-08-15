@@ -17,6 +17,64 @@ const database = getFirestore()
 const REGION = 'asia-south1'
 const DEVICE_PATH = 'homes/{homeId}/devices/{deviceId}'
 
+type EventOrigin = 'ANDROID' | 'SIMULATOR' | 'AUTOMATION' | 'SYSTEM'
+
+export const recordDeviceStateEvents = onDocumentUpdated(
+  { document: DEVICE_PATH, region: REGION },
+  async (event) => {
+    const beforeDocument = event.data?.before
+    const afterDocument = event.data?.after
+    if (!beforeDocument?.exists || !afterDocument?.exists) return
+    const before = beforeDocument.data()
+    const after = afterDocument.data()
+    if (before == null || after == null) return
+
+    const reportedRequestId = nullableString(after.reported?.requestId)
+    const isCutoffWrite = reportedRequestId?.startsWith('safety-cutoff-') ?? false
+
+    const beforeStatus = reportedStatus(before)
+    const afterStatus = reportedStatus(after)
+    if (!isCutoffWrite && beforeStatus !== afterStatus && afterStatus != null) {
+      const occurredAt = eventTimestamp(after.reported?.updatedAt, after.updatedAt)
+      const origin = eventOrigin(after, reportedRequestId)
+      await appendStateEvent(afterDocument.ref, {
+        eventId: stateEventId(null, reportedRequestId, occurredAt.toMillis()),
+        fromStatus: beforeStatus,
+        toStatus: afterStatus,
+        origin: origin.origin,
+        actorId: origin.actorId,
+        requestId: reportedRequestId,
+        occurredAt,
+        channelId: null,
+      })
+    }
+
+    const beforeChannels = channels(before.config?.channels)
+    const afterChannels = channels(after.config?.channels)
+    for (const afterChannel of afterChannels) {
+      const beforeChannel = beforeChannels.find((channel) => channel.id === afterChannel.id)
+      if (beforeChannel == null || beforeChannel.reportedStatus === afterChannel.reportedStatus) {
+        continue
+      }
+      const channelRequestId = nullableString(afterChannel.requestId)
+      if (channelRequestId?.startsWith('safety-cutoff-')) continue
+      const toStatus = channelStatus(afterChannel.reportedStatus)
+      if (toStatus == null) continue
+      const occurredAt = eventTimestamp(after.reported?.updatedAt, after.updatedAt)
+      await appendStateEvent(afterDocument.ref, {
+        eventId: stateEventId(afterChannel.id, channelRequestId, occurredAt.toMillis()),
+        fromStatus: channelStatus(beforeChannel.reportedStatus),
+        toStatus,
+        origin: channelRequestId == null ? 'SIMULATOR' : 'ANDROID',
+        actorId: null,
+        requestId: channelRequestId,
+        occurredAt,
+        channelId: afterChannel.id,
+      })
+    }
+  },
+)
+
 export const trackSafetyOutlet = onDocumentUpdated(
   { document: DEVICE_PATH, region: REGION },
   async (event) => {
@@ -178,4 +236,89 @@ function toSafetySnapshot(data: FirebaseFirestore.DocumentData): SafetySnapshot 
     activatedAtMillis: activatedAt?.toMillis() ?? null,
     cutoffDueAtMillis: cutoffDueAt?.toMillis() ?? null,
   }
+}
+
+interface StateEventFields {
+  eventId: string
+  fromStatus: string | null
+  toStatus: string
+  origin: EventOrigin
+  actorId: string | null
+  requestId: string | null
+  occurredAt: Timestamp
+  channelId: string | null
+}
+
+async function appendStateEvent(
+  deviceReference: FirebaseFirestore.DocumentReference,
+  fields: StateEventFields,
+): Promise<void> {
+  await deviceReference.collection('events').doc(fields.eventId).set({
+    type: 'STATE_REPORTED',
+    fromStatus: fields.fromStatus,
+    toStatus: fields.toStatus,
+    origin: fields.origin,
+    actorId: fields.actorId,
+    requestId: fields.requestId,
+    reason: null,
+    occurredAt: fields.occurredAt,
+    metadata: fields.channelId == null ? {} : { channelId: fields.channelId },
+  })
+}
+
+function stateEventId(
+  channelId: string | null,
+  requestId: string | null,
+  occurredAtMillis: number,
+): string {
+  const scope = channelId == null ? 'device' : channelId
+  if (requestId != null) return `state-${scope}-${requestId}`
+  return `state-${scope}-manual-${occurredAtMillis}`
+}
+
+function eventOrigin(
+  data: FirebaseFirestore.DocumentData,
+  reportedRequestId: string | null,
+): { origin: EventOrigin; actorId: string | null } {
+  const requestedBy = nullableString(data.desired?.requestedBy)
+  const desiredRequestId = nullableString(data.desired?.requestId)
+  if (requestedBy === 'AUTOMATION') return { origin: 'AUTOMATION', actorId: null }
+  if (reportedRequestId != null && reportedRequestId === desiredRequestId && requestedBy != null) {
+    return { origin: 'ANDROID', actorId: requestedBy }
+  }
+  return { origin: 'SIMULATOR', actorId: null }
+}
+
+function reportedStatus(data: FirebaseFirestore.DocumentData): string | null {
+  const status = data.reported?.status
+  return typeof status === 'string' ? status : null
+}
+
+function channelStatus(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
+
+function channels(value: unknown): Array<{ id: string; reportedStatus: unknown; requestId: unknown }> {
+  if (!Array.isArray(value)) return []
+  return value.filter((channel): channel is Record<string, unknown> =>
+    channel != null && typeof channel === 'object')
+    .map((channel) => ({
+      id: typeof channel.id === 'string' ? channel.id : '',
+      reportedStatus: channel.reportedStatus,
+      requestId: channel.requestId,
+    }))
+    .filter((channel) => channel.id !== '')
+}
+
+function eventTimestamp(
+  reportedUpdatedAt: unknown,
+  deviceUpdatedAt: unknown,
+): Timestamp {
+  if (reportedUpdatedAt instanceof Timestamp) return reportedUpdatedAt
+  if (deviceUpdatedAt instanceof Timestamp) return deviceUpdatedAt
+  return Timestamp.now()
+}
+
+function nullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
 }

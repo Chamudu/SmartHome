@@ -15,6 +15,7 @@ import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.RoomLayout
 import com.smarthome.app.domain.model.SmartDevice
 import com.smarthome.app.domain.model.HomeAlert
+import com.smarthome.app.domain.model.DeviceEvent
 import com.smarthome.app.domain.model.defaultFloorName
 import com.smarthome.app.domain.repository.FloorRepository
 import com.smarthome.app.domain.repository.FloorContainsDevicesException
@@ -46,6 +47,9 @@ data class OutletUiState(
     val scheduleUpdatesInFlight: Set<String> = emptySet(),
     val alerts: List<HomeAlert> = emptyList(),
     val isLoadingAlerts: Boolean = false,
+    val eventsByDevice: Map<String, List<DeviceEvent>> = emptyMap(),
+    val isLoadingEvents: Boolean = false,
+    val eventsErrorMessage: String? = null,
     val errorMessage: String? = null,
     val floors: List<FloorPlan> = emptyList(),
     val selectedFloorId: String? = null,
@@ -79,6 +83,7 @@ class OutletViewModel(
     private var alertObservation: Job? = null
     private var floorObservation: Job? = null
     private var roomObservation: Job? = null
+    private val deviceEventJobs: MutableMap<String, Job> = mutableMapOf()
 
     init {
         if (repository.hasAuthenticatedUser) {
@@ -768,6 +773,8 @@ class OutletViewModel(
         floorObservation = null
         roomObservation?.cancel()
         roomObservation = null
+        deviceEventJobs.values.forEach(Job::cancel)
+        deviceEventJobs.clear()
         repository.signOut()
 
         mutableUiState.value = OutletUiState(
@@ -832,7 +839,45 @@ class OutletViewModel(
                             errorMessage = null,
                         )
                     }
+                    observeDeviceEvents(devices)
                 }
+        }
+    }
+
+    private fun observeDeviceEvents(devices: List<SmartDevice>) {
+        val wanted = devices.map { it.id }.toSet()
+        if (wanted.isNotEmpty() && deviceEventJobs.isEmpty()) {
+            mutableUiState.update { it.copy(isLoadingEvents = true) }
+        }
+        deviceEventJobs.keys.filterNot { it in wanted }.forEach { deviceId ->
+            deviceEventJobs.remove(deviceId)?.cancel()
+            mutableUiState.update { state ->
+                state.copy(eventsByDevice = state.eventsByDevice - deviceId)
+            }
+        }
+        wanted.forEach { deviceId ->
+            if (deviceEventJobs.containsKey(deviceId)) return@forEach
+            val job = viewModelScope.launch {
+                repository.observeDeviceEvents(HOME_ID, deviceId)
+                    .catch {
+                        mutableUiState.update { state ->
+                            state.copy(
+                                isLoadingEvents = false,
+                                eventsErrorMessage = "Activity history could not be loaded.",
+                            )
+                        }
+                    }
+                    .collect { events ->
+                        mutableUiState.update { state ->
+                            state.copy(
+                                eventsByDevice = state.eventsByDevice + (deviceId to events),
+                                isLoadingEvents = false,
+                                eventsErrorMessage = null,
+                            )
+                        }
+                    }
+            }
+            deviceEventJobs[deviceId] = job
         }
     }
 
