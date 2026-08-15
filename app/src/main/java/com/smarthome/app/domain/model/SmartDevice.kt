@@ -30,7 +30,9 @@ sealed interface DeviceConfiguration {
     ) : DeviceConfiguration
 
     data class Camera(
+        val mediaType: String = "SNAPSHOT",
         val mediaUri: String,
+        val capturedAtMillis: Long? = null,
     ) : DeviceConfiguration
 }
 
@@ -68,5 +70,17 @@ data class NewDevice(
     val row: Int,
     val channelCount: Int = 2,
     val maxOnDurationSeconds: Int = 900,
-    val mediaUri: String = "https://placehold.co/640x360",
+    val mediaUri: String = "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=640&q=80",
 )
+
+enum class CameraConnectivity(val displayName: String) {
+    ONLINE("ONLINE"),
+    OFFLINE("OFFLINE"),
+    ERROR("ERROR"),
+}
+
+fun DeviceStatus.toCameraConnectivity(): CameraConnectivity = when (this) {
+    DeviceStatus.ON, DeviceStatus.OFF -> CameraConnectivity.ONLINE
+    DeviceStatus.ERROR -> CameraConnectivity.ERROR
+    DeviceStatus.DISCONNECTED -> CameraConnectivity.OFFLINE
+}

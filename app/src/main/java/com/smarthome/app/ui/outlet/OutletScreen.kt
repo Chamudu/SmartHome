@@ -57,8 +57,10 @@ import com.smarthome.app.domain.model.DeviceEvent
 import com.smarthome.app.domain.model.OutletDevice
 import com.smarthome.app.domain.model.PowerState
 import com.smarthome.app.domain.model.SmartDevice
+import com.smarthome.app.domain.model.CameraConnectivity
 import com.smarthome.app.domain.model.AlertSeverity
 import com.smarthome.app.domain.model.HomeAlert
+import com.smarthome.app.domain.model.toCameraConnectivity
 import com.smarthome.app.domain.usage.UsageCalculator
 import com.smarthome.app.domain.usage.UsageReport
 import com.smarthome.app.ui.theme.SmartHomeIcons
@@ -780,6 +782,7 @@ private enum class CameraLoadState { LOADING, SUCCESS, ERROR }
 private fun CameraSnapshot(device: SmartDevice) {
     val configuration = device.configuration as? DeviceConfiguration.Camera ?: return
     var loadState by remember(configuration.mediaUri) { mutableStateOf(CameraLoadState.LOADING) }
+    val connectivity = device.reportedStatus.toCameraConnectivity()
 
     Spacer(modifier = Modifier.height(12.dp))
     Box(
@@ -839,6 +842,21 @@ private fun CameraSnapshot(device: SmartDevice) {
             )
         }
 
+        Surface(
+            color = cameraConnectivityColor(connectivity),
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp),
+        ) {
+            Text(
+                connectivity.displayName,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+            )
+        }
+
         Text(
             text = when (loadState) {
                 CameraLoadState.LOADING -> "LOADING"
@@ -854,6 +872,24 @@ private fun CameraSnapshot(device: SmartDevice) {
                 .padding(horizontal = 7.dp, vertical = 3.dp),
         )
     }
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "Captured ${formatCaptureTime(configuration.capturedAtMillis)} · ${configuration.mediaType}",
+        style = MaterialTheme.typography.bodySmall,
+    )
+}
+
+private fun cameraConnectivityColor(connectivity: CameraConnectivity): Color = when (connectivity) {
+    CameraConnectivity.ONLINE -> Color(0xFF15803D)
+    CameraConnectivity.OFFLINE -> Color(0xFF7C4A00)
+    CameraConnectivity.ERROR -> Color(0xFFB91C1C)
+}
+
+private fun formatCaptureTime(millis: Long?): String {
+    if (millis == null) return "time unknown"
+    val instant = Instant.ofEpochMilli(millis)
+    return DateTimeFormatter.ofPattern("MMM d, HH:mm")
+        .format(instant.atZone(ZoneId.systemDefault()))
 }
 
 @Composable

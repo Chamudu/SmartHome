@@ -356,7 +356,10 @@ private fun DocumentSnapshot.toSmartDevice(): SmartDevice {
             timezone = (config["schedule"] as? Map<*, *>)?.get("timezone") as? String ?: "Asia/Colombo",
         )
         DeviceProfile.CAMERA -> DeviceConfiguration.Camera(
+            mediaType = config["mediaType"] as? String ?: "SNAPSHOT",
             mediaUri = config["mediaUri"] as? String ?: "",
+            capturedAtMillis = (config["capturedAt"] as? com.google.firebase.Timestamp)
+                ?.toDate()?.time,
         )
     }
     return SmartDevice(

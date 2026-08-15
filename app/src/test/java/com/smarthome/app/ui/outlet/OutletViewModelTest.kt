@@ -410,6 +410,80 @@ class OutletViewModelTest {
     }
 
     @Test
+    fun `creating camera forwards configured media uri and infers room`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val outletRepository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val floorRepository = FakeFloorRepository()
+            val viewModel = OutletViewModel(outletRepository, floorRepository)
+            floorRepository.emitFloors(listOf(floor()))
+            advanceUntilIdle()
+            floorRepository.emitRooms(
+                listOf(RoomLayout("office", "Office", 0, 0, 4, 4)),
+            )
+            advanceUntilIdle()
+
+            val mediaUri = "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=640&q=80"
+            viewModel.createDevice(
+                name = "Living room camera",
+                profile = DeviceProfile.CAMERA,
+                column = 2,
+                row = 3,
+                channelCount = 2,
+                maxOnDurationMinutes = 15,
+                mediaUri = mediaUri,
+            )
+            advanceUntilIdle()
+
+            assertEquals("office", outletRepository.createdDevice?.roomId)
+            assertEquals(DeviceProfile.CAMERA, outletRepository.createdDevice?.profile)
+            assertEquals(mediaUri, outletRepository.createdDevice?.mediaUri)
+            assertEquals("Device created.", viewModel.uiState.value.layoutMessage)
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun `creating camera rejects non-https media uri`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val outletRepository = FakeOutletRepository(hasAuthenticatedUser = true)
+            val floorRepository = FakeFloorRepository()
+            val viewModel = OutletViewModel(outletRepository, floorRepository)
+            floorRepository.emitFloors(listOf(floor()))
+            advanceUntilIdle()
+            floorRepository.emitRooms(
+                listOf(RoomLayout("office", "Office", 0, 0, 4, 4)),
+            )
+            advanceUntilIdle()
+
+            viewModel.createDevice(
+                name = "Bad camera",
+                profile = DeviceProfile.CAMERA,
+                column = 2,
+                row = 3,
+                channelCount = 2,
+                maxOnDurationMinutes = 15,
+                mediaUri = "javascript:alert(1)",
+            )
+            advanceUntilIdle()
+
+            assertNull(outletRepository.createdDevice)
+            assertEquals(
+                "Camera media must use an HTTPS URI.",
+                viewModel.uiState.value.layoutMessage,
+            )
+            viewModel.signOut()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
     fun `moving device validates destination and infers room`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
