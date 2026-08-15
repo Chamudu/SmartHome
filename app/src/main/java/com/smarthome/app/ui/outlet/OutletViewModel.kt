@@ -82,6 +82,7 @@ class OutletViewModel(
     private var reportAlertObservation: Job? = null
     private var floorObservation: Job? = null
     private var roomObservation: Job? = null
+    private val safetyTimers = mutableMapOf<String, Job>()
 
     init {
         if (repository.hasAuthenticatedUser) {
@@ -829,6 +830,27 @@ class OutletViewModel(
                     }
                 }
                 .collect { devices ->
+                    devices.forEach { device ->
+                        if (device.profile == DeviceProfile.SAFETY_OUTLET && device.reportedStatus.name == "ON") {
+                            val config = device.configuration as? DeviceConfiguration.SafetyOutlet
+                            if (config != null) {
+                                if (!safetyTimers.containsKey(device.id)) {
+                                    val delayMs = config.cutoffDueAtMillis?.let { maxOf(0L, it - System.currentTimeMillis()) }
+                                        ?: (config.maxOnDurationSeconds * 1000L)
+                                    safetyTimers[device.id] = viewModelScope.launch {
+                                        kotlinx.coroutines.delay(delayMs)
+                                        runCatching {
+                                            repository.requestPowerState(HOME_ID, device.id, PowerState.OFF)
+                                        }
+                                        safetyTimers.remove(device.id)
+                                    }
+                                }
+                            }
+                        } else {
+                            safetyTimers.remove(device.id)?.cancel()
+                        }
+                    }
+
                     mutableUiState.update {
                         it.copy(
                             devices = devices,

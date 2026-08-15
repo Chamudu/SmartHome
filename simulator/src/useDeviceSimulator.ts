@@ -102,10 +102,12 @@ export function useDeviceSimulator() {
 
           // Client-side simulation of Safety Cutoff
           if (device.profile === 'SAFETY_OUTLET' && 'maxOnDurationSeconds' in device.config) {
-            const config = device.config as { maxOnDurationSeconds: number }
-            const maxDurationMs = config.maxOnDurationSeconds * 1000
+            const config = device.config as { maxOnDurationSeconds: number, cutoffDueAt?: { toMillis: () => number } | null }
             if (device.reported.status === 'ON') {
               if (!safetyTimers.current.has(device.id)) {
+                const maxDurationMs = config.cutoffDueAt 
+                  ? Math.max(0, config.cutoffDueAt.toMillis() - Date.now()) 
+                  : config.maxOnDurationSeconds * 1000
                 const timerId = window.setTimeout(() => {
                   safetyTimers.current.delete(device.id)
                   void updateDoc(doc(devicesReference, device.id), {

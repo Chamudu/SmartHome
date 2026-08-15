@@ -341,6 +341,7 @@ private fun DocumentSnapshot.toSmartDevice(): SmartDevice {
         )
         DeviceProfile.SAFETY_OUTLET -> DeviceConfiguration.SafetyOutlet(
             maxOnDurationSeconds = config.requiredInt("maxOnDurationSeconds"),
+            cutoffDueAtMillis = (config["cutoffDueAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
         )
         DeviceProfile.LIGHT -> DeviceConfiguration.Light(
             scheduleEnabled = (config["schedule"] as? Map<*, *>)?.get("enabled") as? Boolean ?: false,

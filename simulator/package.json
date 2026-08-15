@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "seed:demo": "node scripts/seed-demo.mjs",
+    "automation:local": "node scripts/local-automation.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false"
   },
