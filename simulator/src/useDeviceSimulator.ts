@@ -16,6 +16,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import { auth, db, homeId } from './firebase'
@@ -74,7 +75,7 @@ export function useDeviceSimulator() {
 
           if (requiresAcknowledgement) {
             acknowledgements.current.add(acknowledgementKey)
-const batch = writeBatch(database)
+            const batch = writeBatch(database)
             batch.update(doc(devicesReference, device.id), {
               'reported.status': device.desired.status,
               'reported.requestId': requestId,
@@ -82,15 +83,13 @@ const batch = writeBatch(database)
               'reported.errorCode': null,
               commandState: 'APPLIED',
               updatedAt: serverTimestamp(),
-            }).then(() => {
-              void addDoc(collection(db!, 'homes', homeId!, 'alerts'), {
-                deviceId: device.id,
-                type: 'APP_TOGGLE',
-                severity: 'INFO',
-                message: `Device switched ${device.desired.status} via app.`,
-                createdAt: serverTimestamp()
-              })
-            }).catch((cause: unknown) => {
+            })
+            batch.set(doc(collection(db!, 'homes', homeId!, 'alerts')), {
+              deviceId: device.id,
+              type: 'APP_TOGGLE',
+              severity: 'INFO',
+              message: `Device switched ${device.desired.status} via app.`,
+              createdAt: serverTimestamp(),
             })
             if (device.reported.status !== device.desired.status) {
               const origin = ackEventOrigin(device)

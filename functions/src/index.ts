@@ -49,6 +49,30 @@ export const recordDeviceStateEvents = onDocumentUpdated(
       })
     }
 
+    const beforeDesiredStatus = desiredStatus(before)
+    const afterDesiredStatus = desiredStatus(after)
+    if (
+      !isCutoffWrite &&
+      beforeStatus === afterStatus &&
+      beforeDesiredStatus !== afterDesiredStatus &&
+      afterDesiredStatus != null &&
+      afterStatus !== afterDesiredStatus
+    ) {
+      const desiredRequestId = nullableString(after.desired?.requestId)
+      const occurredAt = eventTimestamp(after.desired?.requestedAt, after.updatedAt)
+      const origin = eventOrigin(after, desiredRequestId)
+      await appendStateEvent(afterDocument.ref, {
+        eventId: stateEventId(null, desiredRequestId, occurredAt.toMillis()),
+        fromStatus: beforeStatus,
+        toStatus: afterDesiredStatus,
+        origin: origin.origin,
+        actorId: origin.actorId,
+        requestId: desiredRequestId,
+        occurredAt,
+        channelId: null,
+      })
+    }
+
     const beforeChannels = channels(before.config?.channels)
     const afterChannels = channels(after.config?.channels)
     for (const afterChannel of afterChannels) {
@@ -291,6 +315,11 @@ function eventOrigin(
 
 function reportedStatus(data: FirebaseFirestore.DocumentData): string | null {
   const status = data.reported?.status
+  return typeof status === 'string' ? status : null
+}
+
+function desiredStatus(data: FirebaseFirestore.DocumentData): string | null {
+  const status = data.desired?.status
   return typeof status === 'string' ? status : null
 }
 

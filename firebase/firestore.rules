@@ -227,6 +227,19 @@ service cloud.firestore {
         && validEventMetadata(data.metadata);
     }
 
+    function validAlertData(data) {
+      return data.keys().hasOnly([
+          'deviceId', 'type', 'severity', 'message', 'createdAt'
+        ])
+        && data.deviceId is string
+        && data.type is string
+        && data.type.size() > 0
+        && data.severity in ['INFO', 'WARNING', 'CRITICAL']
+        && data.message is string
+        && data.message.size() > 0
+        && data.createdAt is timestamp;
+    }
+
     function validNewDevice(homeId, data) {
       return data.keys().hasOnly([
           'name', 'profile', 'floorId', 'roomId', 'position', 'desired',
@@ -318,7 +331,7 @@ service cloud.firestore {
 
         match /events/{eventId} {
           allow read: if activeMember(homeId);
-          allow create: if hasRole(homeId, ['SIMULATOR'])
+          allow create: if hasRole(homeId, ['OWNER', 'OPERATOR', 'SIMULATOR'])
             && validEventData(request.resource.data);
           allow update, delete: if false;
         }
@@ -326,7 +339,8 @@ service cloud.firestore {
 
       match /alerts/{alertId} {
         allow read: if activeMember(homeId);
-        allow create: if hasRole(homeId, ['SIMULATOR']);
+        allow create: if hasRole(homeId, ['SIMULATOR'])
+          && validAlertData(request.resource.data);
         allow delete: if false;
         allow update: if activeMember(homeId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
