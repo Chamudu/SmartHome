@@ -9,47 +9,47 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF8B5CF6), // Vibrant Violet
+    primary = Color(0xFF1565C0), // Deep Blue
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFEDE9FE), // Soft purple background
-    onPrimaryContainer = Color(0xFF4C1D95),
-    secondary = Color(0xFFF43F5E), // Vibrant Rose
+    primaryContainer = Color(0xFFD6E4FF), // Light blue background
+    onPrimaryContainer = Color(0xFF00256E),
+    secondary = Color(0xFF0277BD), // Darker blue
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFFFE4E6), // Soft rose background
-    onSecondaryContainer = Color(0xFF881337),
-    tertiary = Color(0xFF10B981), // Emerald green
-    tertiaryContainer = Color(0xFFD1FAE5),
-    onTertiaryContainer = Color(0xFF064E3B),
-    background = Color(0xFFFAFAFA), // Very clean white-grey
+    secondaryContainer = Color(0xFFCDE5FF),
+    onSecondaryContainer = Color(0xFF001D34),
+    tertiary = Color(0xFF006A60), // Teal accent
+    tertiaryContainer = Color(0xFFCBF5ED),
+    onTertiaryContainer = Color(0xFF00201C),
+    background = Color(0xFFF5F8FF), // Slight blue-tinted white
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF18181B),
-    surfaceVariant = Color(0xFFF4F4F5), // Smooth light grey for cards
-    onSurfaceVariant = Color(0xFF3F3F46),
-    error = Color(0xFFEF4444),
-    errorContainer = Color(0xFFFEE2E2),
-    onErrorContainer = Color(0xFF991B1B),
+    onSurface = Color(0xFF1A1C1E),
+    surfaceVariant = Color(0xFFE1E7F0), // Blue-grey cards
+    onSurfaceVariant = Color(0xFF3A4459),
+    error = Color(0xFFBA1A1A),
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFA78BFA),
-    onPrimary = Color(0xFF2E1065),
-    primaryContainer = Color(0xFF5B21B6),
-    onPrimaryContainer = Color(0xFFEDE9FE),
-    secondary = Color(0xFFFB7185),
-    onSecondary = Color(0xFF4C0519),
-    secondaryContainer = Color(0xFF9F1239),
-    onSecondaryContainer = Color(0xFFFFE4E6),
-    tertiary = Color(0xFF34D399),
-    tertiaryContainer = Color(0xFF065F46),
-    onTertiaryContainer = Color(0xFFD1FAE5),
-    background = Color(0xFF09090B),
-    surface = Color(0xFF18181B),
-    onSurface = Color(0xFFFAFAFA),
-    surfaceVariant = Color(0xFF27272A),
-    onSurfaceVariant = Color(0xFFA1A1AA),
-    error = Color(0xFFF87171),
-    errorContainer = Color(0xFF7F1D1D),
-    onErrorContainer = Color(0xFFFECACA),
+    primary = Color(0xFF90CAF9), // Light blue for dark theme
+    onPrimary = Color(0xFF003064),
+    primaryContainer = Color(0xFF00468A),
+    onPrimaryContainer = Color(0xFFD6E4FF),
+    secondary = Color(0xFF81D4FA),
+    onSecondary = Color(0xFF003549),
+    secondaryContainer = Color(0xFF004D67),
+    onSecondaryContainer = Color(0xFFCDE5FF),
+    tertiary = Color(0xFF4DCEBF),
+    tertiaryContainer = Color(0xFF005048),
+    onTertiaryContainer = Color(0xFFCBF5ED),
+    background = Color(0xFF0D1B2A), // Deep dark navy
+    surface = Color(0xFF132337),
+    onSurface = Color(0xFFE2E8F0),
+    surfaceVariant = Color(0xFF1E3248),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    error = Color(0xFFFFB4AB),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
 )
 
 object SmartHomeThemeColors {
@@ -57,10 +57,10 @@ object SmartHomeThemeColors {
         @Composable get() = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     val statusOn: Color
-        @Composable get() = if (isDark) Color(0xFF34D399) else Color(0xFF10B981)
+        @Composable get() = if (isDark) Color(0xFF4ADE80) else Color(0xFF16A34A)
 
     val statusOnContainer: Color
-        @Composable get() = if (isDark) Color(0xFF064E3B) else Color(0xFFD1FAE5)
+        @Composable get() = if (isDark) Color(0xFF14532D) else Color(0xFFDCFCE7)
 
     val statusDisconnected: Color
         @Composable get() = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
