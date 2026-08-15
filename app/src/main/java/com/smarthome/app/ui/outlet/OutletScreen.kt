@@ -362,7 +362,7 @@ private fun OutletDashboard(
                     }
                 }
 
-                TextButton(onClick = { selectedTab = 3 }) {
+                TextButton(onClick = { selectedTab = 5 }) {
                     Icon(
                         SmartHomeIcons.Profile,
                         contentDescription = null,
@@ -407,7 +407,7 @@ private fun OutletDashboard(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        PrimaryTabRow(selectedTabIndex = selectedTab) {
+        PrimaryTabRow(selectedTabIndex = if (selectedTab > 4) 0 else selectedTab) {
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
@@ -448,12 +448,6 @@ private fun OutletDashboard(
                         Icon(SmartHomeIcons.Safety, contentDescription = null)
                     }
                 },
-            )
-            Tab(
-                selected = selectedTab == 5,
-                onClick = { selectedTab = 5 },
-                text = { Text("Profile") },
-                icon = { Icon(SmartHomeIcons.Profile, contentDescription = null) },
             )
         }
 
@@ -593,13 +587,13 @@ private fun OutletDashboard(
                 onDeviceMoved = onDeviceMoved,
                 onDeviceDeleted = onDeviceDeleted,
             )
-        } else if (selectedTab == 2) {
+        } else if (selectedTab == 3) {
             ReportSection(
                 reportAlerts = state.reportAlerts.filter { it.severity == com.smarthome.app.domain.model.AlertSeverity.INFO },
                 devices = state.devices,
                 isLoading = state.isLoadingReport,
             )
-        } else if (selectedTab == 3) {
+        } else if (selectedTab == 4) {
             SafetySection(
                 reportAlerts = state.reportAlerts.filter { it.severity == com.smarthome.app.domain.model.AlertSeverity.CRITICAL },
                 devices = state.devices,
