@@ -341,6 +341,7 @@ const batch = writeBatch(database)
             },
           )
         }
+        }
       })
     } catch (cause) {
       setError(toMessage(cause))

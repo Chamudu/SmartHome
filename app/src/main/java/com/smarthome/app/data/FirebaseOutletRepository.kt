@@ -128,6 +128,20 @@ class FirebaseOutletRepository(
             .document(homeId)
             .collection("alerts")
             .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(20)
+            .addSnapshotListener { snapshot, exception ->
+                when {
+                    exception != null -> close(exception)
+                    snapshot == null -> close(IllegalStateException("Report alert snapshot is missing."))
+                    else -> runCatching {
+                        snapshot.documents.map(DocumentSnapshot::toHomeAlert)
+                    }.onSuccess(::trySend).onFailure(::close)
+                }
+            }
+
+        awaitClose { registration.remove() }
+    }
+
     override fun observeDeviceEvents(
         homeId: String,
         deviceId: String,
@@ -143,9 +157,6 @@ class FirebaseOutletRepository(
             .addSnapshotListener { snapshot, exception ->
                 when {
                     exception != null -> close(exception)
-                    snapshot == null -> close(IllegalStateException("Report alert snapshot is missing."))
-                    else -> runCatching {
-                        snapshot.documents.map(DocumentSnapshot::toHomeAlert)
                     snapshot == null -> close(IllegalStateException("Event snapshot is missing."))
                     else -> runCatching {
                         snapshot.documents.map(DocumentSnapshot::toDeviceEvent)
