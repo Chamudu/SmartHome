@@ -863,7 +863,7 @@ class OutletViewModel(
                         mutableUiState.update { state ->
                             state.copy(
                                 isLoadingEvents = false,
-                                eventsErrorMessage = "Activity history could not be loaded.",
+                                eventsErrorMessage = "Usage history could not be loaded.",
                             )
                         }
                     }

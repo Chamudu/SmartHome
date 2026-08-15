@@ -370,8 +370,8 @@ private fun OutletDashboard(
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("Activity") },
-                icon = { Icon(SmartHomeIcons.Activity, contentDescription = null) },
+                text = { Text("Usage") },
+                icon = { Icon(SmartHomeIcons.Usage, contentDescription = null) },
             )
             Tab(
                 selected = selectedTab == 2,
@@ -978,7 +978,7 @@ private fun ActivitySection(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Activity", style = MaterialTheme.typography.headlineSmall)
+        Text("Usage", style = MaterialTheme.typography.headlineSmall)
         Text(
             "Usage pairs ON/OFF events into activation counts and active time. " +
                 "Incomplete intervals are bounded to the selected period.",
@@ -1030,7 +1030,7 @@ private fun ActivitySection(
         when {
             isLoading -> {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                Text("Loading activity…", style = MaterialTheme.typography.bodyMedium)
+                Text("Loading usage…", style = MaterialTheme.typography.bodyMedium)
             }
 
             devices.isEmpty() -> Text(
