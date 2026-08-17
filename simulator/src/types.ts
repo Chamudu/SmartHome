@@ -6,6 +6,12 @@ export type CommandState = 'IDLE' | 'PENDING' | 'APPLIED' | 'REJECTED' | 'TIMED_
 export type DeviceProfile = 'OUTLET' | 'MULTI_SWITCH' | 'SAFETY_OUTLET' | 'LIGHT' | 'CAMERA'
 export type EventOrigin = 'ANDROID' | 'SIMULATOR' | 'AUTOMATION' | 'SYSTEM'
 
+export type FloorSummary = {
+  id: string
+  name: string
+  level: number
+}
+
 export type DeviceEvent = {
   id: string
   type: string

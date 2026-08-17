@@ -48,10 +48,6 @@ function SimulatorConsole() {
   const [floorFilter, setFloorFilter] = useState('ALL')
   const [profileFilter, setProfileFilter] = useState<DeviceProfile | 'ALL'>('ALL')
 
-  const floors = useMemo(
-    () => [...new Set(simulator.devices.map((device) => device.floorId))].sort(),
-    [simulator.devices],
-  )
   const visibleDevices = simulator.devices.filter((device) =>
     (floorFilter === 'ALL' || device.floorId === floorFilter) &&
     (profileFilter === 'ALL' || device.profile === profileFilter),
@@ -95,10 +91,14 @@ function SimulatorConsole() {
       <section className="workspace">
         <aside className="sidebar">
           <p className="sidebar-label">Floor</p>
-          {['ALL', ...floors].map((floor) => (
-            <button key={floor} className={floorFilter === floor ? 'filter-button is-selected' : 'filter-button'}
-              type="button" onClick={() => setFloorFilter(floor)}>
-              {floor === 'ALL' ? 'All floors' : formatIdentifier(floor)}
+          <button className={floorFilter === 'ALL' ? 'filter-button is-selected' : 'filter-button'}
+            type="button" onClick={() => setFloorFilter('ALL')}>
+            All floors
+          </button>
+          {simulator.floors.map((floor) => (
+            <button key={floor.id} className={floorFilter === floor.id ? 'filter-button is-selected' : 'filter-button'}
+              type="button" onClick={() => setFloorFilter(floor.id)}>
+              {floor.name}
             </button>
           ))}
           <div className="sidebar-rule" />

@@ -18,10 +18,11 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { auth, db, homeId } from './firebase'
-import type { DeviceEvent, DeviceStatus, DeviceTwin } from './types'
+import type { DeviceEvent, DeviceStatus, DeviceTwin, FloorSummary } from './types'
 
 export function useDeviceSimulator() {
   const [user, setUser] = useState<User | null>(null)
+  const [floors, setFloors] = useState<FloorSummary[]>([])
   const [devices, setDevices] = useState<DeviceTwin[]>([])
   const [eventsByDevice, setEventsByDevice] = useState<Record<string, DeviceEvent[]>>({})
   const [listenerConnected, setListenerConnected] = useState(false)
@@ -39,6 +40,7 @@ export function useDeviceSimulator() {
 
   useEffect(() => {
     if (!user || !db || !homeId) {
+      setFloors([])
       setDevices([])
       setEventsByDevice({})
       eventUnsubscribers.current.forEach((unsubscribe) => unsubscribe())
@@ -48,8 +50,21 @@ export function useDeviceSimulator() {
     }
 
     const database = db
+    const floorsReference = collection(database, 'homes', homeId, 'floors')
     const devicesReference = collection(database, 'homes', homeId, 'devices')
-    const unsubscribe = onSnapshot(
+    const unsubscribeFloors = onSnapshot(
+      floorsReference,
+      (snapshot) => {
+        setFloors(snapshot.docs
+          .map((floorSnapshot) => ({
+            id: floorSnapshot.id,
+            ...floorSnapshot.data(),
+          }) as FloorSummary)
+          .sort((left, right) => left.level - right.level || left.name.localeCompare(right.name)))
+      },
+      (cause) => setError(toMessage(cause)),
+    )
+    const unsubscribeDevices = onSnapshot(
       devicesReference,
       (snapshot) => {
         setListenerConnected(true)
@@ -137,7 +152,10 @@ export function useDeviceSimulator() {
       },
     )
 
-    return unsubscribe
+    return () => {
+      unsubscribeFloors()
+      unsubscribeDevices()
+    }
   }, [user])
 
   useEffect(() => {
@@ -327,6 +345,7 @@ export function useDeviceSimulator() {
 
   return {
     user,
+    floors,
     devices,
     eventsByDevice,
     listenerConnected,

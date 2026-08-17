@@ -48,6 +48,7 @@ completed items should remain checked for release traceability.
 ## P1 — Simulator and integration
 
 - [x] Display all seeded devices in the hardware simulator.
+- [x] Resolve device floor references to realtime human-readable floor names in simulator filters.
 - [x] Reflect cloud commands without refresh.
 - [x] Simulate state changes, errors, disconnects, and reconnects.
 - [x] Create a deterministic, idempotent seed tool with two floors and every device profile.

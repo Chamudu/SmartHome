@@ -44,9 +44,9 @@ Compose event
 | Source | Responsibility |
 | --- | --- |
 | `firebase.ts` | Reads local Vite environment configuration and initializes Auth/Firestore |
-| `types.ts` | TypeScript twin/status contract for the current outlet |
-| `useDeviceSimulator.ts` | Auth lifecycle, device listener, transactional device/channel acknowledgement, and reports |
-| `App.tsx` | Configuration, sign-in, filters, multi-device telemetry, and simulator controls |
+| `types.ts` | TypeScript device, event, floor-summary, and status contracts |
+| `useDeviceSimulator.ts` | Auth lifecycle, realtime floor/device listeners, transactional device/channel acknowledgement, and reports |
+| `App.tsx` | Configuration, sign-in, name-resolved floor/profile filters, multi-device telemetry, and simulator controls |
 | `App.css` / `index.css` | Responsive diagnostic-console presentation and global styling |
 | `scripts/seed-demo.mjs` | Authenticated, idempotent demo-floor/room/device creation |
 
