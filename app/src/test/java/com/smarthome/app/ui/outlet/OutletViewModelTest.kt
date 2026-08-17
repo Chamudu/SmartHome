@@ -306,7 +306,7 @@ class OutletViewModelTest {
     }
 
     @Test
-    fun `permission denied command routes to sign in`() = runTest {
+    fun `explicitly revoked command session routes to sign in`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
 
