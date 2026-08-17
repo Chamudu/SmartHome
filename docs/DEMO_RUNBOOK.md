@@ -37,13 +37,18 @@ screenshots or recordings.
 13. Open a light card, save an overnight schedule, and show the schedule text update reactively. When
     running the local Functions emulator, choose a near-current window and show the resulting desired
     command and simulator acknowledgement.
-14. With deployed functions, turn on a short-duration safety outlet and show automatic `OFF`, its event,
-    and the persistent critical alert in Android. Allow for the scheduler's one-minute scan interval.
+14. Open Usage, switch between Today/7 days/30 days, and explain activation count, paired active time,
+    per-device/channel totals, recent events, and why kWh/cost are labelled estimates.
+15. Disconnect the phone network, show the cached-data/offline banner, attempt one safe command, restore
+    connectivity, and verify the in-memory retry completes without repeated taps.
+16. With local Functions emulation, turn on a short-duration safety outlet and show automatic `OFF`, its
+    event, and the persistent critical alert in Android. Allow for the scheduler's one-minute scan
+    interval. Do not describe an Android or browser timer as server enforcement.
 
 ## Planned final walkthrough additions
 
-- Camera snapshot, capture time, placeholder/error behavior, and optional camera phone upload.
-- Activity history and usage totals.
+- Optional camera-phone upload.
+- Per-user alert read acknowledgement.
 
 ## Recovery
 

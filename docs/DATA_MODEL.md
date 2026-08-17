@@ -230,11 +230,12 @@ owner may change only desired state plus request ID, while a simulator may chang
 | `actorId` | string or null | Auth user ID where applicable |
 | `requestId` | string or null | Correlates command and report |
 | `reason` | string or null | Stable machine-readable reason |
-| `occurredAt` | timestamp | Trusted event time |
+| `occurredAt` | timestamp | Server-resolved event time |
 | `metadata` | map | Small event-specific values |
 
-Events are append-only from trusted paths. Clients read them for activity and reporting but do not edit
-historical events.
+Events are append-only. Cloud Functions write trusted automation events through the Admin SDK. The
+dedicated simulator identity may create only schema-valid `STATE_REPORTED` events using the request's
+server time; human clients cannot create events, and no client may update or delete event history.
 
 ### `homes/{homeId}/alerts/{alertId}`
 
@@ -271,11 +272,13 @@ without a permanently connected simulator. ADR 0006 records this deliberate simu
 | --- | --- |
 | Owner/operator | Manage layouts and configurations; request device states |
 | Viewer | Read home state only |
-| Simulator | Read desired state; write narrowly validated reported state |
+| Simulator | Read desired state; write narrowly validated reported state and operational records |
 | Cloud Functions | Enforce cutoffs/schedules, append events, create alerts |
 
-Clients may not write server-controlled timestamps, historical events, cutoff outcomes, or another
-actor's membership role.
+Human clients may not write server-controlled timestamps, historical events, cutoff outcomes, or
+another actor's membership role. The simulator can append a state-report event and an operational alert
+in the same atomic write as its hardware report, but cannot create a safety-cutoff event/alert or modify
+desired state.
 
 ## Initial indexes
 

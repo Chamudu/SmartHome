@@ -215,29 +215,30 @@ service cloud.firestore {
           'type', 'fromStatus', 'toStatus', 'origin', 'actorId',
           'requestId', 'reason', 'occurredAt', 'metadata'
         ])
-        && data.type is string
-        && data.type.size() > 0
+        && data.type == 'STATE_REPORTED'
         && (data.fromStatus == null || validStatus(data.fromStatus))
         && validStatus(data.toStatus)
         && validEventOrigin(data.origin)
         && (data.actorId == null || data.actorId is string)
         && (data.requestId == null || data.requestId is string)
         && (data.reason == null || data.reason is string)
-        && data.occurredAt is timestamp
+        && data.occurredAt == request.time
         && validEventMetadata(data.metadata);
     }
 
     function validAlertData(data) {
       return data.keys().hasOnly([
-          'deviceId', 'type', 'severity', 'message', 'createdAt'
+          'deviceId', 'eventId', 'type', 'severity', 'message', 'createdAt', 'readBy'
         ])
         && data.deviceId is string
-        && data.type is string
-        && data.type.size() > 0
+        && (data.eventId == null || data.eventId is string)
+        && data.type in ['APP_TOGGLE', 'MANUAL_TOGGLE']
         && data.severity in ['INFO', 'WARNING', 'CRITICAL']
         && data.message is string
         && data.message.size() > 0
-        && data.createdAt is timestamp;
+        && data.createdAt == request.time
+        && data.readBy is map
+        && data.readBy.size() == 0;
     }
 
     function validNewDevice(homeId, data) {
@@ -331,7 +332,7 @@ service cloud.firestore {
 
         match /events/{eventId} {
           allow read: if activeMember(homeId);
-          allow create: if hasRole(homeId, ['OWNER', 'OPERATOR', 'SIMULATOR'])
+          allow create: if hasRole(homeId, ['SIMULATOR'])
             && validEventData(request.resource.data);
           allow update, delete: if false;
         }
@@ -362,7 +363,7 @@ service cloud.firestore {
     function simulatorReportedStateUpdate(homeId) {
       return hasRole(homeId, ['SIMULATOR'])
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['reported', 'desired', 'commandState', 'updatedAt'])
+          .hasOnly(['reported', 'commandState', 'updatedAt'])
         && validStatus(request.resource.data.reported.status)
         && request.resource.data.commandState in ['IDLE', 'APPLIED', 'REJECTED'];
     }

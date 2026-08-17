@@ -16,6 +16,7 @@
 | Firebase Android BoM | Keeps Firebase library versions mutually compatible |
 | Google Services plugin | Converts local Firebase Android configuration into generated resources |
 | Coil 2.7 | Loads and caches HTTPS mock-camera snapshots in Compose with asynchronous state callbacks |
+| Android ConnectivityManager | Exposes validated network availability to the ViewModel through `StateFlow` |
 | JUnit 4 and coroutine-test | Tests geometry, status rules, and ViewModel asynchronous behavior |
 
 ## Simulator and Firebase tooling
@@ -34,6 +35,7 @@
 | Node.js 22 | Runtime for tooling and deployed TypeScript Cloud Functions |
 | Firebase Functions v2 | Firestore update trigger and scheduled trusted safety enforcement |
 | Firebase Admin SDK | Privileged transactional device, event, and alert writes after backend validation |
+| Pure Kotlin/TypeScript calculators | Pair event intervals and estimate energy consistently across clients and backend |
 | Cloud Scheduler integration | Once-per-minute due-device scan independent of client lifecycle |
 
 ## Engineering concepts
@@ -56,5 +58,9 @@
   channel updates from being lost.
 - **Trusted time and at-least-once delivery:** server timestamps establish deadlines; transactions and
   deterministic event IDs make repeated function execution safe.
+- **Exponential backoff:** recoverable listeners and commands wait progressively longer between retries,
+  while permanent authorization failures stop and route the user back to sign-in.
+- **Derived reporting:** usage is calculated from immutable state transitions; estimated energy is
+  duration multiplied by assumed wattage and is explicitly not meter telemetry.
 - **Asynchronous image pipeline:** Coil performs network fetch, decoding, size-aware rendering, and
   memory/disk caching away from the main UI work while Compose displays loading/content/error states.

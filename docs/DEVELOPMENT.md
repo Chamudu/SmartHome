@@ -107,3 +107,28 @@ firebase emulators:exec --project demo-smart-home --only firestore \
 
 Use a `demo-` project ID for rule tests so the Firebase CLI cannot accidentally access production
 services when an emulator is missing.
+
+## Local automation checks without deployment
+
+Build/test the Functions package first:
+
+```bash
+npm --prefix functions run check
+```
+
+Start Firestore and Functions emulators in one terminal:
+
+```bash
+firebase emulators:start --project demo-smart-home --only firestore,functions
+```
+
+After the emulator reports that all services are ready, invoke both scheduled functions once from a
+second terminal:
+
+```bash
+npm --prefix simulator run automation:local:once
+```
+
+For repeated one-minute polling, use `npm --prefix simulator run automation:local`. These commands act
+only on the `demo-smart-home` emulator data and do not require billing or cloud deployment. An
+end-to-end cutoff still requires an eligible safety device inside the emulator database.

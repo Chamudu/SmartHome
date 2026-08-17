@@ -57,6 +57,7 @@ outside the MVP.
 - Record important device state transitions as events.
 - Show recent activity for important devices.
 - Report activation count and accumulated active duration for a selected period.
+- Show clearly labelled energy/cost estimates derived from active duration and assumed wattage.
 
 ### Hardware simulator
 
@@ -71,7 +72,7 @@ outside the MVP.
 - Fully offline demonstration using the Firebase Emulator Suite
 - Multiple homes, invitations, and role management
 - Custom image upload behind the grid floor editor
-- Rich analytics and energy/cost estimation
+- Meter-backed energy telemetry, configurable tariffs, and rich analytics
 - Live camera streaming
 - Advanced recurring schedules and conflict resolution
 - iOS or cross-platform mobile clients

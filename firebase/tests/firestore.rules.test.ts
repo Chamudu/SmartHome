@@ -9,6 +9,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  serverTimestamp,
   setDoc,
   updateDoc,
   type Firestore,
@@ -258,6 +259,23 @@ describe('outlet authorization', () => {
     )
   })
 
+  it('denies a simulator forcing desired state while reporting an idle device', async () => {
+    const database =
+      testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(
+      updateDoc(outletReference(database), {
+        'desired.status': 'ON',
+        'reported.status': 'OFF',
+        'reported.requestId': null,
+        'reported.updatedAt': new Date(),
+        'reported.errorCode': null,
+        commandState: 'IDLE',
+        updatedAt: new Date(),
+      }),
+    )
+  })
+
   it('allows a simulator to report applied state', async () => {
     const database =
       testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
@@ -325,6 +343,34 @@ describe('safety alert authorization', () => {
       message: 'Forged alert',
       createdAt: new Date(),
       readBy: {},
+    }))
+  })
+
+  it('allows the simulator to create a canonical operational alert', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertSucceeds(setDoc(doc(database, 'homes', HOME_ID, 'alerts', 'operation-alert'), {
+      deviceId: DEVICE_ID,
+      eventId: 'state-device-request-1',
+      severity: 'INFO',
+      type: 'APP_TOGGLE',
+      message: 'Device switched ON via app.',
+      createdAt: serverTimestamp(),
+      readBy: {},
+    }))
+  })
+
+  it('denies a simulator operational alert with forged read state', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(setDoc(doc(database, 'homes', HOME_ID, 'alerts', 'read-alert'), {
+      deviceId: DEVICE_ID,
+      eventId: null,
+      severity: 'INFO',
+      type: 'MANUAL_TOGGLE',
+      message: 'Device manually switched OFF.',
+      createdAt: serverTimestamp(),
+      readBy: { [SIMULATOR_UID]: serverTimestamp() },
     }))
   })
 
@@ -703,7 +749,7 @@ describe('device event authorization', () => {
       actorId: null,
       requestId: 'request-1',
       reason: null,
-      occurredAt: new Date(),
+      occurredAt: serverTimestamp(),
       metadata: {},
       ...overrides,
     }
@@ -744,10 +790,10 @@ describe('device event authorization', () => {
     await assertSucceeds(getDoc(eventReference(database, 'seed-event')))
   })
 
-  it('allows an owner to record a device state event for a command', async () => {
+  it('denies an owner forging a device state event for a command', async () => {
     const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
 
-    await assertSucceeds(
+    await assertFails(
       setDoc(
         eventReference(database, 'state-device-command-1'),
         validStateEvent({ origin: 'ANDROID', actorId: OWNER_UID }),
@@ -760,6 +806,17 @@ describe('device event authorization', () => {
 
     await assertFails(
       setDoc(eventReference(database, 'forged-event'), validStateEvent({ origin: 'HACKER' })),
+    )
+  })
+
+  it('denies a client event with a trusted automation type', async () => {
+    const database = testEnvironment.authenticatedContext(SIMULATOR_UID).firestore()
+
+    await assertFails(
+      setDoc(
+        eventReference(database, 'forged-safety-event'),
+        validStateEvent({ type: 'SAFETY_CUTOFF' }),
+      ),
     )
   })
 

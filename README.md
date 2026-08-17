@@ -5,9 +5,9 @@ device control, safety automation, camera monitoring, and usage insights into a 
 
 ## Platform components
 
-- `mobile/` — native Android client built with Kotlin and Jetpack Compose
+- `app/` — native Android client built with Kotlin and Jetpack Compose
 - `simulator/` — browser-based hardware simulator built with React and TypeScript
-- `backend/` — trusted automation and notification services
+- `functions/` — trusted TypeScript automation and event-processing services
 - `firebase/` — database rules, indexes, and local emulator configuration
 - `docs/` — product and engineering documentation
 
@@ -20,8 +20,8 @@ device control, safety automation, camera monitoring, and usage insights into a 
 - Schedule lighting and receive operational alerts
 - Review device activity, usage history, and estimated energy and cost
 
-The product is currently in the architecture and specification stage. See the
-[documentation index](docs/README.md) and [delivery roadmap](docs/02-roadmap.md).
+The core monitoring and control flows are implemented. See the [documentation index](docs/README.md),
+[verified implementation status](docs/IMPLEMENTATION_STATUS.md), and [development guide](docs/DEVELOPMENT.md).
 
 ## Energy estimation
 
@@ -52,4 +52,5 @@ estimatedCost     ($) = estimatedEnergy (kWh) × pricePerKwh
   the wattage and tariff are assumptions, not meter readings.
 
 The calculation is mirrored in `functions/src/energyEstimator.ts` and `simulator/src/energy.ts` with
-JUnit and Vitest coverage in `EnergyEstimatorTest.kt` and `energyEstimator.test.ts`.
+JUnit and Vitest coverage. The current fixed `$0.20/kWh` tariff is a demonstration assumption, not a
+regional billing rate or a measured utility charge.

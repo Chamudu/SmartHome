@@ -39,10 +39,11 @@ completed items should remain checked for release traceability.
 - [x] Implement and locally verify the trusted maximum-duration cutoff.
 - [x] Implement scheduled light configuration and a timezone-aware backend evaluator.
 - [x] Implement persistent realtime safety-alert display.
-- [ ] Add complete alert history and per-user read acknowledgement.
+- [x] Add realtime operational and safety alert history.
+- [ ] Add per-user alert read acknowledgement to the Android UI.
 - [x] Implement HTTPS mock camera snapshots with loading and failure states.
-- [ ] Implement event history and basic usage reporting.
-- [ ] Support error, disconnected, loading, empty, and offline UI states.
+- [x] Implement event history and basic usage reporting.
+- [x] Support error, disconnected, loading, empty, and offline UI states.
 
 ## P1 — Simulator and integration
 
@@ -51,7 +52,7 @@ completed items should remain checked for release traceability.
 - [x] Simulate state changes, errors, disconnects, and reconnects.
 - [x] Create a deterministic, idempotent seed tool with two floors and every device profile.
 - [ ] Add end-to-end tests for Android/backend/simulator data contracts where practical.
-- [ ] Deploy and physically accept the safety functions after billing is explicitly enabled.
+- [ ] Accept safety and schedule Functions through the local emulator without enabling billing.
 
 ## P1 — Release readiness
 
@@ -71,4 +72,4 @@ completed items should remain checked for release traceability.
   them to Firebase Storage with Firestore metadata.
 - [ ] Make the complete demonstration runnable offline with Firebase emulators.
 - [ ] Add floor-plan background image upload.
-- [ ] Add energy and estimated-cost reporting.
+- [x] Add energy and estimated-cost reporting.

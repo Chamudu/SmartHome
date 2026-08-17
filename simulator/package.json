@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "seed:demo": "node scripts/seed-demo.mjs",
     "automation:local": "node scripts/local-automation.mjs",
+    "automation:local:once": "node scripts/local-automation.mjs --once",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false"
   },

@@ -1,77 +1,83 @@
 # Implementation Status
 
-Status date: 2026-07-28
+Status date: 2026-08-16
 
 ## Verified implementation
 
-- Native Android foundation using Kotlin, Compose, and Material 3.
-- Firebase Email/Password authentication with restored sessions.
-- Deny-by-default, role-based Firestore Security Rules.
-- Bidirectional device-twin synchronization for `main-outlet` between Android and the React simulator.
-- Desired versus reported state, request correlation, pending state, and hardware error/disconnection.
-- Real-time floor and selected-room listeners.
-- Floor create, select, rename, resize, confirm-delete, and unique-level validation.
-- Rectangular room create, edit, confirm-delete, boundary validation, overlap prevention, and shared edges.
-- Device placement with floor and optional inferred room references.
-- Safe prevention of floor/room deletion or resize that would orphan a currently observed device.
-- Shared polymorphic device collection and secure creation for outlet, multi-switch, safety outlet, light,
-  and camera profiles.
-- Touch-first room drag preview and long-press Add Device coordinate prefill.
-- Tap device marker details, move with placement revalidation, and confirmed deletion.
-- Branded Material 3 light/dark schemes and status text plus semantic container colors.
-- Multi-device simulator collection listener, floor/profile filters, automatic command acknowledgement,
-  and independent status/error/disconnection reports.
-- Authenticated deterministic seed tool for two floors, four rooms, and all five profiles.
-- Node 22/TypeScript second-generation Cloud Functions that start safety timers and enforce due cutoffs.
-- Idempotent cutoff transactions that update device state and create one event plus one persistent alert.
-- Real-time safety-alert observation and critical alert cards in Android.
-- Independent two-, three-, and five-channel switch controls with transactional Android requests and
-  simulator acknowledgements/manual reports.
-- Task-focused Devices/Layout tabs and direct power switches for outlet, safety-outlet, and light cards.
-- Explicit pending/error/disconnected explanations and clearer wording for unconfigured light automation.
-- Visual device dashboard with a blue home header, profile icons, status summary tiles, rounded cards,
-  and display names instead of internal floor/room identifiers.
-- Convention-based floor names derived from unique levels during creation, with editable names afterward.
-- Light schedule editor with 24-hour time, IANA timezone, overnight-window support, and role-restricted
-  Firestore updates.
-- Timezone-aware scheduled light evaluator implemented for local Functions verification.
-- Filterable device dashboard, accessible status-aware floor markers, and responsive launcher artwork.
-- Dedicated Profile tab with the authenticated email and sign-out moved out of the home header.
-- HTTPS mock camera snapshot rendering with honest mock labeling, loading feedback, failure fallback,
-  content description, memory caching, and disk caching through Coil.
-- Energy estimate reporting in the Usage tab: estimated kilowatt-hours and cost derived from active
-  duration times assumed per-profile wattage, with mirrored TypeScript calculators for Functions and the
-  simulator.
+- Native Android client using Kotlin, Jetpack Compose, Material 3, MVVM, repositories, coroutines, and
+  `Flow`.
+- Firebase Email/Password authentication with restored sessions and home-scoped role authorization.
+- Deny-by-default Firestore Security Rules with emulator tests for owner, simulator, outsider, and
+  unauthenticated access.
+- Bidirectional device-twin synchronization between Android and the React simulator, including request
+  correlation, pending state, acknowledgement, errors, and disconnection.
+- Multi-floor grid layouts with unique levels, rectangular rooms, validation, touch drag creation,
+  long-press device placement, editing, and protected deletion.
+- Outlet, two/three/five-channel multi-switch, safety outlet, scheduled light, and mock-camera profiles.
+- Independent transactional multi-switch channel commands and simulator reports.
+- Material 3 light/dark presentation, semantic device states, profile icons, dashboard filtering, and a
+  dedicated Profile destination.
+- HTTPS mock camera snapshots with loading, failure, cache, captured-time, and connectivity presentation.
+- Node 22/TypeScript safety and light-schedule Functions with pure decision logic, idempotent cutoff
+  transactions, events, and alerts.
+- Append-only device state events written by the simulator and trusted automation events written by
+  Cloud Functions. Human clients cannot create or rewrite event history.
+- Android Usage views for Today, 7 days, and 30 days, including activation count, active duration,
+  recent events, per-device estimates, multi-switch channel breakdown, whole-home estimated kWh, and
+  estimated cost.
+- Matching Kotlin and TypeScript usage/energy calculators with explicit handling for duplicate,
+  unpaired, pre-period, and still-active intervals.
+- Realtime operational and safety-alert observation. Simulator operational alerts use the canonical
+  alert shape and cannot impersonate trusted safety-cutoff alerts.
+- Android connectivity observation, cached-state messaging, listener retry with exponential backoff,
+  and in-memory command retry after reconnection.
+- Deterministic authenticated seed tooling and a browser hardware dashboard covering all five profiles.
 
 ## Current verification evidence
 
-| Layer | Evidence |
+| Layer | Evidence on `dev` |
 | --- | --- |
-| Android domain/ViewModel | 50 passing JUnit tests |
+| Android domain/ViewModel | 61 passing JUnit tests |
 | Android packaging | `:app:assembleDebug` succeeds |
-| Android static analysis | `:app:lintDebug` succeeds with 0 errors |
-| Firestore authorization/schema | 33 passing emulator-backed Vitest tests |
-| Cloud Functions | TypeScript build and 24 Vitest decision tests pass |
+| Android static analysis | `:app:lintDebug` succeeds |
+| Firestore authorization/schema | 49 emulator-backed Vitest tests after integration hardening |
+| Cloud Functions | TypeScript build and 24 Vitest tests pass |
 | Simulator | TypeScript typecheck, Oxlint, and Vite production build succeed |
-| Cloud rules | Tested rules deployed successfully to the development Firebase project |
-| Physical integration | Outlet synchronization and earlier floor lifecycle accepted on a phone |
+| Physical integration | Previous outlet/floor flows accepted; merged usage/recovery changes still need phone acceptance |
 
-## Implemented but awaiting physical acceptance
+The simulator build currently reports a non-failing large-chunk warning: its main minified JavaScript
+bundle is approximately 777 KB before gzip and 233 KB after gzip.
 
-- Branded theme on representative light/dark system modes.
-- Automatic cutoff and persistent alert display after production Functions deployment.
-- Scheduled light execution after production Functions deployment.
+## Implemented but awaiting acceptance
 
-## Not implemented yet
+- Usage, event history, energy estimates, alert reports, camera connectivity, and offline/recovery UI on
+  a physical phone.
+- Complete two-client regression testing after the `dev` branch integration.
+- End-to-end device-state acceptance of safety cutoffs and light schedules in the local emulator. The
+  one-shot helper and both empty-database scheduler invocations are verified.
+- TalkBack semantics, 48 dp touch targets, large font scaling, rotation, and representative light/dark
+  modes on hardware.
 
-- Touch resize/move for existing rooms; device movement currently uses a coordinate form after tapping.
-- Editing an existing safety duration and production deployment of the verified cutoff functions.
-- Camera upload and optional second-phone camera node; URI snapshot rendering is complete.
-- Executing the seed against a target environment still requires owner credentials exported locally.
-- Activity reporting and energy estimation are implemented; offline demonstration, CI, and signed
-  release packaging remain.
+## Known limitations
 
-## Active branch
+- Production scheduled Functions are not deployed. Safety cutoffs and scheduled lights must be
+  demonstrated with local emulators; no billing-dependent work is part of the current plan.
+- Per-user alert read acknowledgement is represented in the schema and Rules but is not exposed in the
+  Android UI or repository yet.
+- Android observes at most 200 recent events per device. A busy device can therefore have an incomplete
+  30-day report; the UI does not yet disclose truncation.
+- Estimated energy uses assumed profile wattages and a fixed demonstration tariff rather than meter
+  telemetry or a configured regional price.
+- Pending commands are retained only in ViewModel memory. Firestore cache keeps visible data offline,
+  but a queued command does not survive application-process death.
+- Existing rooms are edited with forms rather than touch resize/move.
+- Camera upload and the optional second-phone camera node remain unimplemented; current camera media is
+  an HTTPS mock snapshot.
+- CI, a signed release APK, complete offline demonstration, and release packaging remain pending.
 
-`feature/ui-ux-overhaul` contains the visual refinement, profile navigation, launcher, accessibility,
-and mock-camera work. It remains separate until physical acceptance is complete.
+## Branch state
+
+`dev` is the current integration branch and contains all commits from `develop` plus the merged teammate
+features. `develop` is an ancestor and should not receive independent changes. After this integration is
+accepted, choose one canonical integration branch and update repository branch protection/defaults to
+avoid future `dev`/`develop` divergence.

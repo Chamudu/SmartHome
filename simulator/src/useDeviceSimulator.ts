@@ -9,14 +9,12 @@ import {
   CollectionReference,
   collection,
   doc,
-  addDoc,
   limit,
   onSnapshot,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
-  updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import { auth, db, homeId } from './firebase'
@@ -32,7 +30,6 @@ export function useDeviceSimulator() {
   const [authBusy, setAuthBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const acknowledgements = useRef(new Set<string>())
-  const safetyTimers = useRef<Map<string, number>>(new Map())
   const eventUnsubscribers = useRef(new Map<string, () => void>())
 
   useEffect(() => {
@@ -84,17 +81,21 @@ export function useDeviceSimulator() {
               commandState: 'APPLIED',
               updatedAt: serverTimestamp(),
             })
+            const stateChanged = device.reported.status !== device.desired.status
+            const eventId = stateChanged ? stateEventId('device', requestId) : null
             batch.set(doc(collection(db!, 'homes', homeId!, 'alerts')), {
               deviceId: device.id,
+              eventId,
               type: 'APP_TOGGLE',
               severity: 'INFO',
               message: `Device switched ${device.desired.status} via app.`,
               createdAt: serverTimestamp(),
+              readBy: {},
             })
-            if (device.reported.status !== device.desired.status) {
+            if (stateChanged) {
               const origin = ackEventOrigin(device)
               batch.set(
-                eventDocument(devicesReference, device.id, stateEventId('device', requestId)),
+                eventDocument(devicesReference, device.id, eventId!),
                 {
                   type: 'STATE_REPORTED',
                   fromStatus: device.reported.status,
@@ -128,41 +129,6 @@ export function useDeviceSimulator() {
               setError(toMessage(cause))
             })
           })
-
-          // Client-side simulation of Safety Cutoff
-          if (device.profile === 'SAFETY_OUTLET' && 'maxOnDurationSeconds' in device.config) {
-            const config = device.config as { maxOnDurationSeconds: number, cutoffDueAt?: { toMillis: () => number } | null }
-            if (device.reported.status === 'ON') {
-              if (!safetyTimers.current.has(device.id)) {
-                const maxDurationMs = config.cutoffDueAt 
-                  ? Math.max(0, config.cutoffDueAt.toMillis() - Date.now()) 
-                  : config.maxOnDurationSeconds * 1000
-                const timerId = window.setTimeout(() => {
-                  safetyTimers.current.delete(device.id)
-                  void updateDoc(doc(devicesReference, device.id), {
-                    'reported.status': 'OFF',
-                    'desired.status': 'OFF',
-                    'reported.updatedAt': serverTimestamp(),
-                    commandState: 'IDLE',
-                    updatedAt: serverTimestamp()
-                  })
-                  void addDoc(collection(db!, 'homes', homeId!, 'alerts'), {
-                    deviceId: device.id,
-                    type: 'SAFETY_CUTOFF',
-                    severity: 'CRITICAL',
-                    message: `${device.name} exceeded maximum ON duration of ${config.maxOnDurationSeconds}s. Automatically powered off.`,
-                    createdAt: serverTimestamp()
-                  })
-                }, maxDurationMs)
-                safetyTimers.current.set(device.id, timerId)
-              }
-            } else {
-              if (safetyTimers.current.has(device.id)) {
-                clearTimeout(safetyTimers.current.get(device.id))
-                safetyTimers.current.delete(device.id)
-              }
-            }
-          }
         })
       },
       (cause) => {
@@ -237,6 +203,9 @@ export function useDeviceSimulator() {
     setError(null)
     try {
       const batch = writeBatch(db)
+      const current = devices.find((device) => device.id === deviceId)
+      const stateChanged = current != null && current.reported.status !== status
+      const eventId = stateChanged ? manualEventId('device') : null
       batch.update(doc(db, 'homes', homeId, 'devices', deviceId), {
         'reported.status': status,
         'reported.requestId': null,
@@ -245,20 +214,21 @@ export function useDeviceSimulator() {
         commandState: 'IDLE',
         updatedAt: serverTimestamp(),
       })
-      await addDoc(collection(db, 'homes', homeId, 'alerts'), {
+      batch.set(doc(collection(db, 'homes', homeId, 'alerts')), {
         deviceId,
+        eventId,
         type: 'MANUAL_TOGGLE',
         severity: 'INFO',
         message: `Device manually switched ${status}.`,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        readBy: {},
       })
-      const current = devices.find((device) => device.id === deviceId)
-      if (current != null && current.reported.status !== status) {
+      if (current != null && stateChanged) {
         batch.set(
           eventDocument(
             collection(db, 'homes', homeId, 'devices'),
             deviceId,
-            manualEventId('device'),
+            eventId!,
           ),
           {
             type: 'STATE_REPORTED',
@@ -315,10 +285,12 @@ export function useDeviceSimulator() {
           const alertRef = doc(collection(db!, 'homes', homeId!, 'alerts'))
           transaction.set(alertRef, {
             deviceId: device.id,
+            eventId: before != null && before.reportedStatus !== status ? eventId : null,
             type: 'MANUAL_TOGGLE',
             severity: 'INFO',
             message: `${current.name} manually switched ${status}.`,
-            createdAt: serverTimestamp()
+            createdAt: serverTimestamp(),
+            readBy: {},
           })
         if (before != null && before.reportedStatus !== status) {
           transaction.set(
@@ -390,19 +362,22 @@ async function acknowledgeSwitchChannel(
         : channel)
     transaction.update(reference, { 'config.channels': channels, updatedAt: serverTimestamp() })
     const alertRef = doc(collection(db!, 'homes', homeId!, 'alerts'))
+    const eventId = beforeStatus !== afterStatus ? stateEventId(channelId, requestId) : null
     transaction.set(alertRef, {
       deviceId: device.id,
+      eventId,
       type: 'APP_TOGGLE',
       severity: 'INFO',
       message: `${current.name} switched ${current.desiredStatus} via app.`,
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      readBy: {},
     })
     if (beforeStatus !== afterStatus) {
       transaction.set(
         eventDocument(
           collection(db!, 'homes', homeId!, 'devices'),
           deviceId,
-          stateEventId(channelId, requestId),
+          eventId!,
         ),
         {
           type: 'STATE_REPORTED',

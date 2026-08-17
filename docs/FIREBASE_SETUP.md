@@ -180,7 +180,7 @@ Deploy Firestore rules only after running their emulator-backed tests:
 firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-## 8. Verify and deploy backend automation
+## 8. Verify backend automation locally
 
 The `functions/` package targets the Node.js 22 runtime. Build and test it before deployment:
 
@@ -189,11 +189,19 @@ npm --prefix functions install
 npm --prefix functions run check
 ```
 
-Scheduled functions require a billing-enabled Firebase project. Enabling billing is an explicit project
-owner decision. After that decision, deploy the tested index and functions:
+Production scheduled functions require infrastructure outside the current environment. Keep the
+implementation local and do not enable billing or deploy Functions. Start the Functions and Firestore
+emulators:
 
 ```bash
-firebase deploy --only firestore:indexes,functions
+firebase emulators:start --project demo-smart-home --only firestore,functions
+```
+
+From another terminal, invoke both scheduled functions once or poll every minute:
+
+```bash
+npm --prefix simulator run automation:local:once
+npm --prefix simulator run automation:local
 ```
 
 The safety scheduler scans once per minute, so a due cutoff may be applied up to approximately one
@@ -246,7 +254,8 @@ manual refresh and prevent normal power commands until the reported state return
 - Owner and simulator accounts are separate identities.
 - Both membership document IDs exactly match their Authentication user IDs.
 - The simulator account can read the outlet and write reported state.
-- The simulator account cannot write desired state, membership, events, or alerts.
+- The simulator account cannot write desired state, membership, trusted safety events, or trusted safety
+  alerts. It may append narrowly validated state-report events and operational alerts.
 - The owner account cannot directly forge reported hardware state.
 - Android commands appear in the simulator without a manual refresh.
 - Simulator confirmations and error states appear in Android without a manual refresh.

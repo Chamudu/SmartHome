@@ -1,12 +1,11 @@
-import fetch from 'node-fetch'; // Polyfilled or natively available in Node 18+
-
-const PROJECT_ID = process.env.SEED_FIREBASE_PROJECT_ID || 'smart-home-a99ed';
+const PROJECT_ID = process.env.AUTOMATION_FIREBASE_PROJECT_ID || 'demo-smart-home';
 const REGION = 'asia-south1';
-const EMULATOR_HOST = '127.0.0.1:5001';
+const FUNCTIONS_EMULATOR_HOST = '127.0.0.1:5001';
+const RUN_ONCE = process.argv.includes('--once');
 
-const ENDPOINTS = [
-  `http://${EMULATOR_HOST}/${PROJECT_ID}/${REGION}/enforceSafetyCutoffs`,
-  `http://${EMULATOR_HOST}/${PROJECT_ID}/${REGION}/enforceLightSchedules`
+const FUNCTIONS = [
+  'enforceSafetyCutoffs',
+  'enforceLightSchedules',
 ];
 
 console.log('Starting Local Automation Polling...');
@@ -14,25 +13,35 @@ console.log(`Polling every 60 seconds against project: ${PROJECT_ID}\n`);
 
 async function triggerAutomations() {
   console.log(`[${new Date().toISOString()}] Triggering scheduled functions...`);
-  
-  for (const url of ENDPOINTS) {
+  let failed = false;
+
+  for (const functionName of FUNCTIONS) {
+    // Firebase CLI exposes v2 background functions with a generated `-0` suffix locally.
+    const url = `http://${FUNCTIONS_EMULATOR_HOST}/${PROJECT_ID}/${REGION}/${functionName}-0`;
     try {
-      // In Firebase v2, scheduled functions are accessible via HTTP GET/POST on the emulator
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
       if (response.ok) {
-        console.log(`✅ Successfully triggered ${url.split('/').pop()}`);
+        console.log(`Successfully triggered ${functionName}`);
       } else {
-        console.error(`❌ Failed to trigger ${url.split('/').pop()}: ${response.status} ${response.statusText}`);
+        failed = true;
+        console.error(`Failed to trigger ${functionName}: ${response.status} ${response.statusText}`);
       }
     } catch (err) {
-      console.error(`❌ Error triggering ${url.split('/').pop()}: ${err.message}`);
+      failed = true;
+      console.error(`Error triggering ${functionName}: ${err.message}`);
     }
   }
   console.log('---');
+  if (failed && RUN_ONCE) process.exitCode = 1;
 }
 
-// Trigger immediately on start
-triggerAutomations();
+await triggerAutomations();
 
-// Poll every 60 seconds to emulate the cron job schedule
-setInterval(triggerAutomations, 60000);
+if (!RUN_ONCE) {
+  // Poll every 60 seconds to emulate the production scheduler.
+  setInterval(triggerAutomations, 60000);
+}

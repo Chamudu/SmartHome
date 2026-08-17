@@ -26,6 +26,10 @@ npm --prefix functions run check
 
 ## Current automated coverage
 
+Verification on 2026-08-16 produced 61 Android unit tests, 49 Firestore Rules tests, and 24 Functions
+tests, all passing. Simulator typecheck, lint, production build, Android assembly, and Android lint also
+passed.
+
 - Device status permits commands only for normal connected states.
 - Sign-in begins observation and clears password state.
 - Valid commands reach the repository; error-state commands do not.
@@ -42,7 +46,8 @@ npm --prefix functions run check
   denial.
 - Complete valid outlet, safety outlet, light, and camera seed shapes.
 - Safety timer start/clear transitions, duration bounds, exact due-time boundary, and retry behavior.
-- Active members can read trusted alerts while owner and simulator clients cannot forge them.
+- Active members can read trusted alerts; human clients cannot forge event history; and the simulator
+  can create only canonical operational alerts, not trusted safety-cutoff alerts.
 - A ViewModel repository stream exposes backend-created alerts to reactive Android UI state.
 - A multi-switch ViewModel command addresses the requested device/channel only.
 - A generic light/outlet command routes to the selected device rather than the legacy primary outlet.
@@ -56,6 +61,14 @@ npm --prefix functions run check
   equal endpoints, and invalid IANA timezone identifiers.
 - Authentication exposes the restored/signed-in account email to the Profile destination without
   retaining the password.
+- Usage interval tests cover ordered and unordered transitions, duplicate states, unpaired OFF events,
+  intervals crossing the period boundary, ongoing intervals, and channel grouping.
+- Energy tests cover each profile wattage, duration conversion, cost calculation, and independent
+  multi-switch accumulation in Kotlin and TypeScript.
+- Recovery tests cover transient/permanent/session error classification, exponential delay caps,
+  listener resubscription, command retry, offline queuing, and reconnection flushing.
+- Security tests explicitly deny simulator desired-state changes even when it reports an otherwise valid
+  idle device, and deny client-created automation event types.
 - Android lint checks resources, manifest, dependencies, Compose source, and accessibility-related
   static rules. Physical TalkBack and touch-target acceptance remains a separate manual test.
 
@@ -66,3 +79,6 @@ real network timing. These require a physical phone plus the simulator and Fireb
 Record the tested build commit, device/Android version, steps, expected result, and observed result.
 For light scheduling, run Functions locally unless production scheduled infrastructure has been
 separately authorized; a source build does not imply a cloud deployment.
+
+The usage listener currently caps history at 200 events per device. Manual acceptance must use a data
+set below that threshold or explicitly record that a longer report is truncated.

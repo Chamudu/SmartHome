@@ -22,6 +22,7 @@ updated alongside implementation and records the current behavior of the system.
 15. [Testing strategy](TESTING.md) — test layers, commands, and current evidence.
 16. [Demonstration runbook](DEMO_RUNBOOK.md) — repeatable end-to-end product walkthrough.
 17. [Camera node design](CAMERA_NODE.md) — optional second-phone snapshot architecture.
+18. [Team development onboarding](TEAM_ONBOARDING.md) — workstation setup, verification, and branch workflow.
 
 Architecture decisions are stored under [`adr/`](adr/).
 
