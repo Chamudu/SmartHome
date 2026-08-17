@@ -240,39 +240,17 @@ class FirebaseOutletRepository(
         val userId = authentication.currentUser?.uid
             ?: throw IllegalStateException("Authentication is required.")
 
-        val reference = outletDocument(homeId, deviceId)
-        firestore.runTransaction { transaction ->
-            val snapshot = transaction.get(reference)
-            val reportedStatus = snapshot.getString("reported.status")
-            val requestId = UUID.randomUUID().toString()
-            transaction.update(
-                reference,
-                mapOf(
-                    "desired.status" to powerState.name,
-                    "desired.requestId" to requestId,
-                    "desired.requestedBy" to userId,
-                    "desired.requestedAt" to FieldValue.serverTimestamp(),
-                    "commandState" to CommandState.PENDING.name,
-                    "updatedAt" to FieldValue.serverTimestamp(),
-                ),
-            )
-            if (reportedStatus != null && reportedStatus != powerState.name) {
-                transaction.set(
-                    reference.collection("events").document("state-device-$requestId"),
-                    mapOf(
-                        "type" to "STATE_REPORTED",
-                        "fromStatus" to reportedStatus,
-                        "toStatus" to powerState.name,
-                        "origin" to EventOrigin.ANDROID.name,
-                        "actorId" to userId,
-                        "requestId" to requestId,
-                        "reason" to null,
-                        "occurredAt" to FieldValue.serverTimestamp(),
-                        "metadata" to emptyMap<String, Any>(),
-                    ),
-                )
-            }
-        }.await()
+        val requestId = UUID.randomUUID().toString()
+        outletDocument(homeId, deviceId).update(
+            mapOf(
+                "desired.status" to powerState.name,
+                "desired.requestId" to requestId,
+                "desired.requestedBy" to userId,
+                "desired.requestedAt" to FieldValue.serverTimestamp(),
+                "commandState" to CommandState.PENDING.name,
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ),
+        ).await()
     }
 
     override suspend fun requestSwitchChannelState(

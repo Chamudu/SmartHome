@@ -7,8 +7,9 @@ import java.io.IOException
  * Classifies Firestore/Auth failures so the client can choose a recovery path.
  *
  * Recoverable failures are transient (temporary connectivity or server throttling) and should be
- * retried with backoff or queued until connectivity returns. Session-revoked failures mean the
- * authenticated session is no longer accepted by the server and the user must sign in again.
+ * retried with backoff or queued until connectivity returns. Session-revoked failures are explicit
+ * authentication failures; a Firestore permission denial is an authorization/data-contract failure
+ * and must not destroy an otherwise valid login session.
  *
  * The classifier deliberately avoids touching [FirebaseFirestoreException]'s static state unless the
  * cause actually is a Firestore exception, because that class's static initializer depends on the
@@ -25,7 +26,6 @@ object FirestoreErrorClassifier {
 
     fun isSessionRevoked(cause: Throwable): Boolean = when (cause) {
         is SessionRevokedException -> true
-        is FirebaseFirestoreException -> cause.code.name == PERMISSION_DENIED_NAME
         else -> false
     }
 
@@ -35,8 +35,6 @@ object FirestoreErrorClassifier {
         "RESOURCE_EXHAUSTED",
         "DEADLINE_EXCEEDED",
     )
-
-    private const val PERMISSION_DENIED_NAME = "PERMISSION_DENIED"
 }
 
 /**

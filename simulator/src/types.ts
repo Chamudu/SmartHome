@@ -66,3 +66,5 @@ export type DeviceTwin = {
   commandState: CommandState
   config: DeviceConfig
 }
+
+export type DeviceTwinData = Omit<DeviceTwin, 'id'>
