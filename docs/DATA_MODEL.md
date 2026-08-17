@@ -76,6 +76,11 @@ OWNER | OPERATOR | VIEWER | SIMULATOR
 The MVP seeds one owner and one simulator identity. Roles preserve a path to least-privilege writes even
 when the browser simulator is used instead of physical hardware.
 
+For initial setup, Security Rules allow only the authenticated user named by a new home's `createdBy`
+value to create their own active `OWNER` membership. All subsequent membership writes require an
+established owner. This avoids a privileged service-account file while preventing another user from
+claiming the home.
+
 ## Documents
 
 ### `users/{userId}`

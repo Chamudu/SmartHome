@@ -58,8 +58,9 @@ documentation. Record each generated Firebase Authentication user ID for members
 Create a Cloud Firestore database. Security configuration is defined in
 `firebase/firestore.rules`; do not leave a deployed database in permissive test mode.
 
-Use the Firebase console or trusted Admin tooling to create the initial documents below. Console/Admin
-operations are appropriate for bootstrapping because the owner membership does not exist yet.
+The authenticated seed command described later can create the initial documents below. The Rules permit
+only the authenticated user recorded in `createdBy` to create that home's first active `OWNER`
+membership. An established owner can then add the dedicated simulator membership.
 
 ### Home document
 
@@ -276,6 +277,8 @@ Current profile creation checks:
 - `CAMERA`: snapshot media with an HTTPS URI and server capture timestamp
 
 The repeatable authenticated seed tool is `simulator/scripts/seed-demo.mjs`. It requires Firebase web
-configuration and owner credentials through process environment variables listed in
-`firebase/seed.example`; values are never committed. The tool skips existing fixed IDs and uses the same
-Security Rules as Android rather than bypassing authorization with a service account.
+configuration plus owner and simulator credentials through process environment variables listed in
+`firebase/seed.example`; values are never committed. On an empty database it creates the home, securely
+bootstraps the creator's owner membership, adds the simulator membership, and then creates deterministic
+floors, rooms, and devices. It skips existing fixed IDs and uses the same Security Rules as the clients
+rather than bypassing authorization with a service account.

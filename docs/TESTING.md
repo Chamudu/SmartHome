@@ -26,7 +26,7 @@ npm --prefix functions run check
 
 ## Current automated coverage
 
-Verification on 2026-08-16 produced 61 Android unit tests, 49 Firestore Rules tests, and 24 Functions
+Verification on 2026-08-17 produced 61 Android unit tests, 52 Firestore Rules tests, and 24 Functions
 tests, all passing. Simulator typecheck, lint, production build, Android assembly, and Android lint also
 passed.
 

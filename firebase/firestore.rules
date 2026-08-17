@@ -20,6 +20,17 @@ service cloud.firestore {
         && membership(homeId).data.role in roles;
     }
 
+    function validInitialOwnerMembership(homeId, userId, data) {
+      return signedIn()
+        && request.auth.uid == userId
+        && get(/databases/$(database)/documents/homes/$(homeId)).data.createdBy
+          == request.auth.uid
+        && data.keys().hasOnly(['role', 'active', 'createdAt'])
+        && data.role == 'OWNER'
+        && data.active == true
+        && data.createdAt is timestamp;
+    }
+
     function validStatus(status) {
       return status in ['ON', 'OFF', 'ERROR', 'DISCONNECTED'];
     }
@@ -290,7 +301,12 @@ service cloud.firestore {
 
       match /members/{userId} {
         allow read: if activeMember(homeId);
-        allow write: if hasRole(homeId, ['OWNER']);
+        allow create: if validInitialOwnerMembership(
+            homeId,
+            userId,
+            request.resource.data
+          ) || hasRole(homeId, ['OWNER']);
+        allow update, delete: if hasRole(homeId, ['OWNER']);
       }
 
       match /floors/{floorId} {

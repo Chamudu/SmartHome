@@ -226,6 +226,51 @@ describe('home authorization', () => {
   })
 })
 
+describe('initial owner membership bootstrap', () => {
+  const bootstrapHomeId = 'bootstrap-home'
+
+  async function createBootstrapHome(database: Firestore, createdBy = OWNER_UID) {
+    await setDoc(doc(database, 'homes', bootstrapHomeId), {
+      name: 'Bootstrap home',
+      timezone: 'Asia/Colombo',
+      createdBy,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  }
+
+  it('allows a home creator to claim their initial OWNER membership', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    await assertSucceeds(createBootstrapHome(database))
+
+    await assertSucceeds(setDoc(
+      doc(database, 'homes', bootstrapHomeId, 'members', OWNER_UID),
+      { role: 'OWNER', active: true, createdAt: serverTimestamp() },
+    ))
+  })
+
+  it('denies a different user claiming initial ownership', async () => {
+    const ownerDatabase = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    await assertSucceeds(createBootstrapHome(ownerDatabase))
+
+    const outsiderDatabase = testEnvironment.authenticatedContext(OUTSIDER_UID).firestore()
+    await assertFails(setDoc(
+      doc(outsiderDatabase, 'homes', bootstrapHomeId, 'members', OUTSIDER_UID),
+      { role: 'OWNER', active: true, createdAt: serverTimestamp() },
+    ))
+  })
+
+  it('denies the creator bootstrapping a non-owner role', async () => {
+    const database = testEnvironment.authenticatedContext(OWNER_UID).firestore()
+    await assertSucceeds(createBootstrapHome(database))
+
+    await assertFails(setDoc(
+      doc(database, 'homes', bootstrapHomeId, 'members', OWNER_UID),
+      { role: 'SIMULATOR', active: true, createdAt: serverTimestamp() },
+    ))
+  })
+})
+
 describe('outlet authorization', () => {
   it('allows an owner to request desired power state', async () => {
     const database =

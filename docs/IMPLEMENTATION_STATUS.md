@@ -40,7 +40,7 @@ Status date: 2026-08-16
 | Android domain/ViewModel | 61 passing JUnit tests |
 | Android packaging | `:app:assembleDebug` succeeds |
 | Android static analysis | `:app:lintDebug` succeeds |
-| Firestore authorization/schema | 49 emulator-backed Vitest tests after integration hardening |
+| Firestore authorization/schema | 52 emulator-backed Vitest tests after integration hardening and secure bootstrap |
 | Cloud Functions | TypeScript build and 24 Vitest tests pass |
 | Simulator | TypeScript typecheck, Oxlint, and Vite production build succeed |
 | Physical integration | Previous outlet/floor flows accepted; merged usage/recovery changes still need phone acceptance |

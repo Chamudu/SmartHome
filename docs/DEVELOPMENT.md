@@ -87,9 +87,10 @@ npm --prefix simulator run build
 
 ## Seed the demonstration home
 
-`simulator/scripts/seed-demo.mjs` signs in as the owner and creates missing deterministic rooms/devices.
-It reuses an existing level 0/1 floor when large enough and skips existing fixed IDs. Copy the variable
-names from `firebase/seed.example`, export values for the current shell, then run:
+`simulator/scripts/seed-demo.mjs` authenticates the dedicated simulator to discover its UID, signs in as
+the owner, bootstraps an empty home and both memberships, and creates missing deterministic rooms and
+devices. It reuses an existing level 0/1 floor when large enough and skips existing fixed IDs. Copy the
+variable names from `firebase/seed.example`, export values for the current shell, then run:
 
 ```bash
 npm --prefix simulator run seed:demo

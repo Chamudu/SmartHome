@@ -9,6 +9,7 @@ import {
   limit,
   query,
   serverTimestamp,
+  setLogLevel,
   setDoc,
   where,
 } from 'firebase/firestore'
@@ -20,6 +21,8 @@ const requiredEnvironment = [
   'SEED_FIREBASE_APP_ID',
   'SEED_OWNER_EMAIL',
   'SEED_OWNER_PASSWORD',
+  'SEED_SIMULATOR_EMAIL',
+  'SEED_SIMULATOR_PASSWORD',
 ]
 
 const missing = requiredEnvironment.filter((name) => !process.env[name])
@@ -38,18 +41,64 @@ const app = initializeApp({
 })
 const auth = getAuth(app)
 const database = getFirestore(app)
+setLogLevel('silent')
 
-await signInWithEmailAndPassword(
+const simulatorCredential = await signInWithEmailAndPassword(
+  auth,
+  process.env.SEED_SIMULATOR_EMAIL,
+  process.env.SEED_SIMULATOR_PASSWORD,
+)
+const simulatorUid = simulatorCredential.user.uid
+await signOut(auth)
+
+const ownerCredential = await signInWithEmailAndPassword(
   auth,
   process.env.SEED_OWNER_EMAIL,
   process.env.SEED_OWNER_PASSWORD,
 )
+const ownerUid = ownerCredential.user.uid
 
 try {
   const homeReference = doc(database, 'homes', homeId)
-  if (!(await getDoc(homeReference)).exists()) {
-    throw new Error(`Home ${homeId} does not exist. Bootstrap the home and owner membership first.`)
+  const ownerMembershipReference = doc(
+    database,
+    'homes',
+    homeId,
+    'members',
+    ownerUid,
+  )
+  const ownerMembership = {
+    role: 'OWNER',
+    active: true,
+    createdAt: serverTimestamp(),
   }
+
+  if (!(await readableDocumentExists(ownerMembershipReference))) {
+    try {
+      await setDoc(ownerMembershipReference, ownerMembership)
+    } catch (error) {
+      if (!isPermissionDenied(error)) throw error
+
+      await setDoc(homeReference, {
+        name: 'Primary home',
+        timezone: 'Asia/Colombo',
+        createdBy: ownerUid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      process.stdout.write(`create home ${homeId}\n`)
+      await setDoc(ownerMembershipReference, ownerMembership)
+    }
+    process.stdout.write(`create owner membership ${ownerUid}\n`)
+  } else {
+    process.stdout.write(`skip existing owner membership ${ownerUid}\n`)
+  }
+
+  await createWhenMissing(
+    doc(database, 'homes', homeId, 'members', simulatorUid),
+    { role: 'SIMULATOR', active: true, createdAt: serverTimestamp() },
+    `simulator membership ${simulatorUid}`,
+  )
 
   const groundFloorId = await ensureFloor(0, 'demo-ground-floor', 'Ground floor', 12, 16)
   const firstFloorId = await ensureFloor(1, 'demo-first-floor', 'First floor', 12, 12)
@@ -145,6 +194,22 @@ async function createWhenMissing(reference, data, label) {
   }
   await setDoc(reference, data)
   process.stdout.write(`create ${label}\n`)
+}
+
+async function readableDocumentExists(reference) {
+  try {
+    return (await getDoc(reference)).exists()
+  } catch (error) {
+    if (isPermissionDenied(error)) return false
+    throw error
+  }
+}
+
+function isPermissionDenied(error) {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && error.code === 'permission-denied'
 }
 
 function baseDevice(name, profile, floorId, roomId, column, row, config) {
