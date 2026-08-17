@@ -2,6 +2,9 @@
 
 ## Change process
 
+New contributors should complete the [team development onboarding](TEAM_ONBOARDING.md) before taking
+ownership of a feature.
+
 - Keep `main` releasable and develop changes on short-lived feature branches.
 - Connect each change to a documented product capability or defect.
 - Prefer small commits with focused, imperative messages.

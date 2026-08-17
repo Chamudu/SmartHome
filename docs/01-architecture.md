@@ -1,4 +1,4 @@
-# Proposed Architecture
+# Architecture
 
 ## Recommended technology stack
 
@@ -6,8 +6,8 @@
 | --- | --- | --- |
 | Mobile | Kotlin, Jetpack Compose, Material 3 | Modern native UI, lifecycle integration, and strong Android tooling |
 | Mobile architecture | MVVM, repositories, Kotlin coroutines and Flow | Separates UI/state/data and maps naturally to real-time streams |
-| Dependency injection | Hilt | Standard Android lifecycle-aware dependency management |
-| Local/offline data | Room where durable local history is needed; Firebase cache initially | Avoid premature duplication while preserving an upgrade path |
+| Dependency injection | Constructor defaults/manual injection currently; Hilt is optional later | Keeps the current graph small while repositories remain replaceable in tests |
+| Local/offline data | Firestore Android cache | Avoids premature duplication; Room remains an option for durable reporting data |
 | Cloud database | Firebase Cloud Firestore | Real-time listeners, offline support, flexible document model |
 | Identity | Firebase Authentication | Provides user identity needed by database security rules |
 | Backend automation | Firebase Cloud Functions using TypeScript | Trusted event/timer execution for cutoffs and schedules |
@@ -41,18 +41,20 @@ Firestore is the synchronization hub. A UI write is optimistic but not authorita
 Backend code validates time-sensitive rules, writes final state, and records an immutable event.
 Both clients subscribe to the affected documents and therefore redraw without a refresh button.
 
-## Suggested repository layout
+## Repository layout
 
 ```text
 SmartHome/
-├── mobile/                 Android Gradle project
+├── app/                    Android application module
+├── functions/              Trusted TypeScript Cloud Functions
 ├── simulator/              React/TypeScript application
-├── backend/                Cloud Functions and shared backend tests
-├── firebase/               Firestore indexes, rules, emulator fixtures
+├── firebase/               Firestore rules, indexes, and emulator tests
 ├── docs/                   Product and engineering documentation
-├── scripts/                Repeatable development/demo commands
-└── .github/workflows/      Continuous integration
+├── build.gradle.kts        Root Android build configuration
+└── firebase.json           Firebase CLI and emulator configuration
 ```
+
+Cloud Functions and a repeatable authenticated seed script are implemented. CI workflows remain planned.
 
 ## Core engineering concerns
 

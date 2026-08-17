@@ -27,8 +27,11 @@ Exit condition: toggling one outlet in either client updates the other client wi
 ## Phase 2 — Floors and device profiles
 
 - Implement navigation and floor selection.
-- Render sample floor images with an abstract grid and device coordinates.
+- Implement direct grid manipulation for room selection/creation and long-press device placement.
+- Retain explicit editor actions as accessible gesture alternatives.
+- Apply the Material 3 theme, navigation hierarchy, and semantic device/status presentation.
 - Add common status UI and all heterogeneous device profiles.
+- Add authorized device creation and profile-specific configuration.
 - Add loading, error, disconnected, and offline behavior.
 
 Exit condition: two floors and every required device type can be demonstrated reliably.

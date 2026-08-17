@@ -1,0 +1,22 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "devices",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "profile", "order": "ASCENDING" },
+        { "fieldPath": "reported.status", "order": "ASCENDING" },
+        { "fieldPath": "config.cutoffDueAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "devices",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "profile", "order": "ASCENDING" },
+        { "fieldPath": "config.schedule.enabled", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
