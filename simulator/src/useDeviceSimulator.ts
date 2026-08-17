@@ -18,7 +18,13 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { auth, db, homeId } from './firebase'
-import type { DeviceEvent, DeviceStatus, DeviceTwin, FloorSummary } from './types'
+import type {
+  DeviceEvent,
+  DeviceStatus,
+  DeviceTwin,
+  DeviceTwinData,
+  FloorSummary,
+} from './types'
 
 export function useDeviceSimulator() {
   const [user, setUser] = useState<User | null>(null)
@@ -70,9 +76,9 @@ export function useDeviceSimulator() {
         setListenerConnected(true)
         const nextDevices = snapshot.docs
           .map((deviceSnapshot) => ({
+            ...(deviceSnapshot.data() as DeviceTwinData),
             id: deviceSnapshot.id,
-            ...deviceSnapshot.data(),
-          }) as DeviceTwin)
+          }))
           .sort((left, right) => left.name.localeCompare(right.name))
         setDevices(nextDevices)
         setError(null)
@@ -287,7 +293,7 @@ export function useDeviceSimulator() {
       await runTransaction(db, async (transaction) => {
         const reference = doc(db!, 'homes', homeId!, 'devices', deviceId)
         const snapshot = await transaction.get(reference)
-        const device = snapshot.data() as DeviceTwin | undefined
+        const device = snapshot.data() as DeviceTwinData | undefined
         if (!device || device.profile !== 'MULTI_SWITCH' || !('channels' in device.config)) {
           throw new Error('Multi-switch channels are unavailable.')
         }
@@ -302,7 +308,7 @@ export function useDeviceSimulator() {
         if (current) {
           const alertRef = doc(collection(db!, 'homes', homeId!, 'alerts'))
           transaction.set(alertRef, {
-            deviceId: device.id,
+            deviceId,
             eventId: before != null && before.reportedStatus !== status ? eventId : null,
             type: 'MANUAL_TOGGLE',
             severity: 'INFO',
@@ -369,7 +375,7 @@ async function acknowledgeSwitchChannel(
   await runTransaction(db, async (transaction) => {
     const reference = doc(db!, 'homes', homeId!, 'devices', deviceId)
     const snapshot = await transaction.get(reference)
-    const device = snapshot.data() as DeviceTwin | undefined
+    const device = snapshot.data() as DeviceTwinData | undefined
     if (!device || device.profile !== 'MULTI_SWITCH' || !('channels' in device.config)) return
     const current = device.config.channels.find((channel) => channel.id === channelId)
     if (!current || current.requestId !== requestId) return
@@ -383,7 +389,7 @@ async function acknowledgeSwitchChannel(
     const alertRef = doc(collection(db!, 'homes', homeId!, 'alerts'))
     const eventId = beforeStatus !== afterStatus ? stateEventId(channelId, requestId) : null
     transaction.set(alertRef, {
-      deviceId: device.id,
+      deviceId,
       eventId,
       type: 'APP_TOGGLE',
       severity: 'INFO',

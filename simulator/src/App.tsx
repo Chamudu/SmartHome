@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 import { isFirebaseConfigured } from './firebase'
@@ -43,6 +43,7 @@ function ConfigurationRequired() {
 
 function SimulatorConsole() {
   const simulator = useDeviceSimulator()
+  const nowMillis = useMinuteClock()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [floorFilter, setFloorFilter] = useState('ALL')
@@ -126,6 +127,7 @@ function SimulatorConsole() {
               {visibleDevices.map((device) => (
                 <DeviceCard key={device.id} device={device}
                   events={simulator.eventsByDevice[device.id] ?? []}
+                  nowMillis={nowMillis}
                   busy={simulator.busyDeviceIds.has(device.id)}
                   busyChannelKeys={simulator.busyChannelKeys}
                   onReport={(status) => void simulator.reportStatus(device.id, status)}
@@ -140,9 +142,10 @@ function SimulatorConsole() {
   )
 }
 
-function DeviceCard({ device, events, busy, busyChannelKeys, onReport, onReportChannel }: {
+function DeviceCard({ device, events, nowMillis, busy, busyChannelKeys, onReport, onReportChannel }: {
   device: DeviceTwin
   events: DeviceEvent[]
+  nowMillis: number
   busy: boolean
   busyChannelKeys: ReadonlySet<string>
   onReport: (status: DeviceStatus) => void
@@ -156,12 +159,15 @@ function DeviceCard({ device, events, busy, busyChannelKeys, onReport, onReportC
     const usageEvents = events
       .map(deviceEventToUsageEvent)
       .filter((event): event is UsageEvent => event !== null)
+    const latestEventMillis = usageEvents.reduce(
+      (latest, event) => Math.max(latest, event.occurredAtMillis),
+      nowMillis,
+    )
     return calculateUsageReport(usageEvents, {
-      periodStartMillis: Date.now() - USAGE_PERIOD_MILLIS,
-      periodEndMillis: Date.now(),
-      initialStatus: device.reported.status,
+      periodStartMillis: nowMillis - USAGE_PERIOD_MILLIS,
+      periodEndMillis: latestEventMillis,
     })
-  }, [events, device.reported.status])
+  }, [events, nowMillis])
   const hasOngoing = usage.entries.some((entry) => entry.usage.ongoing)
   const energyEstimate = useMemo(
     () => estimateReport(device.profile, usage),
@@ -242,6 +248,17 @@ function DeviceCard({ device, events, busy, busyChannelKeys, onReport, onReportC
         <span>{busy ? 'Writing state…' : 'Ready'}</span></footer>
     </article>
   )
+}
+
+function useMinuteClock(): number {
+  const [nowMillis, setNowMillis] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMillis(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  return nowMillis
 }
 
 function formatProfile(profile: DeviceProfile | 'ALL') {
